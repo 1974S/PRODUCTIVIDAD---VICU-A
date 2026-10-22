@@ -319,13 +319,14 @@ function repFact(x){ if(x.repFact!=null&&x.repFact!=='') return num(x.repFact); 
 
 function kpiTurno(tid){
   const tr=recs('trabajos',tid), bl=recs('backlogs',tid), qc=recs('qc',tid);
-  const k={total:tr.length,prog:0,imprev:0,porTipo:{},repUnid:0,repLineas:0,repAgg:{},backlogs:bl.length,qcTotal:qc.length,qcOk:0,qcObs:0,qcNok:0,mo:0,rep:0};
+  const k={total:tr.length,prog:0,imprev:0,porTipo:{},repUnid:0,repLineas:0,repAgg:{},backlogs:bl.length,qcTotal:qc.length,qcOk:0,qcObs:0,qcNok:0,mo:0,rep:0,hh:0,hsDisp:0,util:null};
   tr.forEach(x=>{
     const p=x.condicion==='programado'; if(p) k.prog++; else k.imprev++;
     const tp=x.reparacion||'Sin clasificar'; const o=(k.porTipo[tp]=k.porTipo[tp]||{p:0,i:0}); if(p) o.p++; else o.i++;
     (x.repuestos||[]).forEach(r=>{ const c=num(r.cant); k.repUnid+=c; k.repLineas++; const key=(r.desc||r.codigo||'s/d').trim(); k.repAgg[key]=(k.repAgg[key]||0)+c; });
-    k.mo+=num(x.moFact); k.rep+=repFact(x);
+    k.mo+=num(x.moFact); k.rep+=repFact(x); k.hh+=num(x.hh);
   });
+  { const T=S.turnos[tid]; k.hsDisp=T?(num(T.hsDisp)||(num(T.hsTurno)*DIAS_TURNO)):0; k.util=k.hh>0?pct(k.hh,k.hsDisp):null; }
   qc.forEach(q=>{ if(q.resultado==='No conforme') k.qcNok++; else if(q.resultado==='Con observaciones') k.qcObs++; else k.qcOk++; });
   k.pProg=pct(k.prog,k.total); k.pQC=pct(k.qcOk,k.qcTotal); k.fact=k.mo+k.rep;
   return k;
@@ -405,6 +406,7 @@ function kc(num,lbl,cls,sm){ return `<div class="kpi-card ${cls||''}"><div class
 function kpiBlock(k){
   let h=`<div class="kpi-strip">${kc(k.total,'Trabajos','kpi-blue')}${kc(k.prog,'Programados','kpi-green')}${kc(k.imprev,'Imprevistos','kpi-orange')}${kc(k.backlogs,'Backlogs','kpi-purple')}</div>`;
   h+=`<div class="kpi-strip">${kc(k.qcTotal,'Insp. QC','kpi-blue')}${kc(fpct(k.pQC),'QC conformes','kpi-green')}${kc(fnum(k.repUnid,1),'Repuestos (unid.)','kpi-orange')}${kc(fpct(k.pProg),'% programado','kpi-purple')}</div>`;
+  if(k.hh>0) h+=`<div class="kpi-strip c3">${kc(fnum(k.hh,0),'Horas hombre','kpi-blue')}${kc(fnum(k.hsDisp,0),'Hs. disponibles','kpi-orange')}${kc(fpct(k.util),'Utilización','kpi-green')}</div>`;
   if(!ocultarCostos()) h+=`<div class="kpi-strip c3">${kc(fm(k.mo),'Facturado mano de obra','kpi-blue',1)}${kc(fm(k.rep),'Facturado repuestos','kpi-orange',1)}${kc(fm(k.fact),'Total facturado','kpi-green',1)}</div>`;
   return h;
 }
@@ -563,6 +565,7 @@ function vFlota(c){
       h+=`<div class="btn-row wr" style="margin-top:10px;"><button class="btn-secondary" onclick="selTodasOT()">Seleccionar todas</button><button class="btn-primary" onclick="importarOT()">Importar seleccionadas</button></div><div class="note">Importa a "Trabajos": PM = programado; el resto, imprevisto. Revisá el tipo de reparación después, se clasifica por palabras clave.</div>`;
     }
   }
+  h+=`<div class="sec-hdr">Cargar informes</div><div class="wr"><div class="plan-card"><div class="plan-row"><div class="plan-sys">Cambio de turno fin de roster (Excel o Word), órdenes de trabajo valorizadas (PDF) e Informe de indicadores de Flota (PDF). Se detecta el tipo automáticamente y podés elegir varios PDF a la vez.</div></div></div><div class="fg"><label class="fl">Archivo (.xlsx, .docx, .pdf)</label><input class="fi" type="file" accept=".xlsx,.xls,.csv,.docx,.pdf" multiple onchange="cargarInforme(this.files);this.value=''"></div>`+vInforme()+`</div>`;
   h+=`<div class="sec-hdr">Carga manual desde Excel / CSV</div><div class="wr">`+vImport()+`</div>`;
   c.innerHTML=h;
 }
@@ -575,7 +578,7 @@ const IMPDEF={
   qc:{l:'Inspecciones de calidad',f:[['fecha','Fecha',['fecha','date']],['unidad','Unidad / Patente',['unidad','patente','dominio','interno']],['ot','N° OT',['ot','nro ot','orden']],['resultado','Resultado',['resultado','estado','conforme']],['inspector','Inspector',['inspector','responsable']],['obs','Observaciones',['observaciones','obs','comentarios']]]}
 };
 function vImport(){
-  let h=`<div class="plan-card"><div class="plan-row"><div class="plan-sys">Cargá una planilla con trabajos, backlogs o inspecciones del turno seleccionado.<div class="ev-int">PDF y Word: próxima etapa.</div></div></div></div>`;
+  let h=`<div class="plan-card"><div class="plan-row"><div class="plan-sys">Planilla propia con trabajos, backlogs o inspecciones del turno seleccionado.</div></div></div>`;
   h+=`<div class="fg"><label class="fl">Qué vas a importar</label><select class="fs" id="impEnt" onchange="if(imp){imp.ent=this.value;autoMap();render();}"><option value="trabajos" ${imp&&imp.ent==='trabajos'?'selected':''}>Trabajos (con repuestos y facturación)</option><option value="backlogs" ${imp&&imp.ent==='backlogs'?'selected':''}>Backlogs realizados</option><option value="qc" ${imp&&imp.ent==='qc'?'selected':''}>Inspecciones de calidad</option></select></div>`;
   h+=`<div class="fg"><label class="fl">Archivo (.xlsx, .xls, .csv)</label><input class="fi" type="file" accept=".xlsx,.xls,.csv" onchange="leerExcel(this.files[0])"></div>`;
   if(imp&&imp.rows){
@@ -588,7 +591,8 @@ function vImport(){
   return h;
 }
 function leerExcel(file){
-  if(!file) return; if(!window.XLSX){ toast('Librería Excel no disponible (sin conexión)'); return; }
+  if(!file) return;
+  if(!/\.(xlsx|xls|csv)$/i.test(file.name)){ toast('Eso no es una planilla. Los PDF y Word se cargan en "Cargar informes" (más arriba)'); return; } if(!window.XLSX){ toast('Librería Excel no disponible (sin conexión)'); return; }
   const rd=new FileReader();
   rd.onload=e=>{ try{
     const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
@@ -639,6 +643,323 @@ function plantilla(){
   XLSX.writeFile(wb,'Plantilla_Productividad_Vicuna.xlsx');
 }
 
+/* ═══════════ CARGA DE INFORMES (cambio de turno Excel/Word, indicadores PDF) ═══════════ */
+let rep=null; // vista previa del informe cargado
+function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error('Sin conexión para cargar '+src.split('/').pop())); document.head.appendChild(s); }); }
+function supDeTexto(t){ const n=norm(t); for(const k of SUP_NOMBRES){ if(n.includes(SUPERVISORES[k])) return k; } return ''; }
+function horasTexto(v){ if(typeof v==='number') return v; const m=String(v==null?'':v).replace(',','.').match(/\d+(?:\.\d+)?/); return m?parseFloat(m[0]):null; }
+function patenteDe(v){ const s=String(v||'').trim().toUpperCase(); const m=s.match(/[A-Z]{2}\d{3}[A-Z]{2}|[A-Z]{3}\d{3}/); return m?m[0]:s.replace(/\s+/g,' '); }
+function esRoster(aoa){ return aoa.some(r=>norm(r[0]).startsWith('n ot freddy')); }
+const RE_PROG=/(^| )pm( |$)|preventiv|programad|mensual/;
+function parseRoster(aoa){
+  const out={fecha:'',sup:'',supTxt:'',grupo:'',turnoDia:'',hsTurno:12,tecnicos:'',rows:[],pend:[],obs:''};
+  let hi=-1;
+  aoa.forEach((r,i)=>{
+    r.forEach((c,j)=>{
+      const n=norm(c);
+      const next=()=>{ for(let k=j+1;k<r.length;k++) if(r[k]!==''&&r[k]!=null) return r[k]; return ''; };
+      if(n==='fecha'&&!out.fecha) out.fecha=toISO(next());
+      else if(n==='grupo') out.grupo=String(next());
+      else if(n==='turno') out.turnoDia=String(next());
+      else if(n.startsWith('supervisor')&&!out.supTxt){ out.supTxt=String(next()).trim(); out.sup=supDeTexto(out.supTxt); }
+      else if(n.startsWith('hs del turno')){ const h=horasTexto(next()); if(h) out.hsTurno=h; }
+      else if(/^tecnicos t\s*dia/.test(n)){ out.tecnicos=String(c).replace(/^[^:]*:\s*/,'').trim(); }
+    });
+    if(hi<0&&norm(r[0]).startsWith('n ot freddy')) hi=i;
+  });
+  if(hi<0) return out;
+  const hn=aoa[hi].map(norm), ix=p=>hn.findIndex(h=>h.startsWith(p));
+  const C={nro:0,u:ix('n de interno'),tipo:ix('tipo de reparacion'),causa:ix('causa'),rep:ix('reparacion realizada'),dia:hn.findIndex(h=>h==='dia'),t:ix('tiempo de reparacion'),hh:ix('horas hombre')};
+  let modo='jobs';
+  for(let i=hi+1;i<aoa.length;i++){
+    const r=aoa[i]; const a=String(r[0]==null?'':r[0]).trim(), an=norm(a);
+    if(an.startsWith('observaciones')){ out.obs=aoa.slice(i+1).map(x=>String(x[0]||'').trim()).filter(Boolean).join(' '); break; }
+    if(an.startsWith('tareas pendientes')){ modo='pend'; continue; }
+    const unidad=String(r[C.u]==null?'':r[C.u]).trim();
+    if(modo==='jobs'){
+      if(/^\d+$/.test(a)&&unidad){
+        out.rows.push({nro:+a,unidad:patenteDe(unidad),tipo:String(r[C.tipo]||'').trim(),causa:String(r[C.causa]||'').trim(),rep:String(r[C.rep]||'').trim(),
+          dia:C.dia>=0?toISO(r[C.dia]):'',t:horasTexto(r[C.t]),hh:horasTexto(r[C.hh])});
+      }else if(!a&&unidad){ modo='pend'; i--; }
+      else if(!a&&!unidad&&!r.some(v=>v!==''&&v!=null)) continue;
+      else if(a&&!/^\d+$/.test(a)) modo='pend';
+    }else{
+      if(unidad&&!/^tel/i.test(unidad)) out.pend.push({unidad:patenteDe(unidad),titulo:String(r[2]||'').trim(),detalle:String(r[3]||'').trim()});
+    }
+  }
+  return out;
+}
+function claseTrabajo(x){
+  const txt=norm(x.tipo+' '+x.causa); const prog=RE_PROG.test(txt);
+  let rp; if(/mensual|inpeccion|inspeccion/.test(txt)&&prog) rp=pick('Inspección mensual'); else if(prog&&/(^| )pm( |$)|preventiv|servicio/.test(txt)) rp=pick('PM 5.000 km'); else rp=clasificarRep(x.tipo+' '+x.causa+' '+x.rep,'');
+  return {condicion:prog?'programado':'imprevisto',reparacion:rp};
+}
+function diasDe(iso){ const [y,m,d]=iso.split('-').map(Number); return Math.round(Date.UTC(y,m-1,d)/864e5); }
+// Empareja trabajos de roster con OT (de Flota o del PDF) por patente + fecha (el N° OT del roster no es el de Flota)
+function emparejar(trs,ots){
+  const used=new Set(), pairs=[];
+  [...trs].sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')).forEach(t=>{
+    const tur=S.turnos[t.turnoId]; let best=null,bs=1e9;
+    ots.forEach(o=>{
+      if(used.has(o.key)||o.patente!==t.unidad||!o.fecha) return;
+      if(tur&&!enTurno(tur,o.fecha)) return;
+      const d=t.fechaEst?2:Math.abs(diasDe(t.fecha)-diasDe(o.fecha)); if(d>3) return;
+      const s=d+(o.pm===(t.condicion==='programado')?0:1.5); if(s<bs){ bs=s; best=o; }
+    });
+    if(best){ used.add(best.key); pairs.push([t,best]); }
+  });
+  return pairs;
+}
+function otsFlotaNorm(){
+  const ya=new Set(Object.values(S.trabajos).filter(x=>x.otKey).map(x=>x.otKey));
+  return flotaOT.filter(o=>o.tipo!=='Venta'&&!ya.has(o.id)).map(o=>{ const m=otMontos(o);
+    return {key:o.id,nro:String(o.nro||''),patente:String(o.patente||'').toUpperCase().trim(),fecha:o.fecha_iso||toISO(o.fecha),pm:o.tipo==='PM',
+      repuestos:(o.repuestos||[]).map(r=>({codigo:r.codigo||'',desc:r.desc||'',cant:num(r.cant)||1,precio:null})),mo:m.mo,rep:m.rep,flota:true}; });
+}
+function aplicarPar(t,o){
+  t.ot=o.nro||t.ot||'';
+  if(o.repuestos&&o.repuestos.length&&!(t.repuestos||[]).length) t.repuestos=o.repuestos;
+  if(o.flota){ t.otKey=o.key; if(!ocultarCostos()){ t.moFact=o.mo; t.repFact=o.rep; } t.origen='roster+flota'; }
+  else t.origen=(t.origen||'roster')+'+pdf';
+  if(t.fechaEst&&o.fecha){ t.fecha=o.fecha; t.fechaEst=false; }
+  put('trabajos',t);
+}
+async function cargarInforme(fl){
+  const files=fl&&typeof fl.length==='number'&&!fl.name?[...fl]:(fl?[fl]:[]);
+  for(const f of files) await cargarUno(f);
+  render();
+}
+async function cargarUno(file){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  try{
+    toast('Leyendo '+file.name+'…');
+    if(['xlsx','xls','csv'].includes(ext)){
+      if(!window.XLSX) throw new Error('Librería Excel no disponible (sin conexión)');
+      const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array',cellDates:true});
+      const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
+      if(!esRoster(aoa)){ rep={kind:'aviso',name:file.name,msg:'Este Excel no es un "Cambio de turno fin de roster". Si es una planilla propia de trabajos, backlogs o inspecciones, usá la carga genérica de más abajo.'}; render(); return; }
+      rosterPreview(file.name,aoa);
+    }else if(ext==='docx'){
+      if(!window.mammoth) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js');
+      const r=await mammoth.convertToHtml({arrayBuffer:await file.arrayBuffer()});
+      const doc=new DOMParser().parseFromString(r.value,'text/html');
+      const aoa=[]; doc.querySelectorAll('tr').forEach(tr=>aoa.push([...tr.children].map(td=>td.textContent.trim())));
+      if(aoa.length&&esRoster(aoa)) rosterPreview(file.name,aoa);
+      else rep={kind:'aviso',name:file.name,msg:(doc.querySelector('img')&&!doc.body.textContent.trim()?'Este Word contiene solamente una imagen (foto o captura del cambio de turno), sin texto ni tablas, por lo que no se puede leer de forma confiable. Cargá el Excel original del mismo cambio de turno.':'No se encontró la tabla del cambio de turno en este Word. Cargá el Excel original.')};
+    }else if(ext==='pdf'){
+      if(!window.pdfjsLib){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
+      const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+      const pages=[]; for(let p=1;p<=pdf.numPages;p++){ const tc=await (await pdf.getPage(p)).getTextContent(); pages.push(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]}))); }
+      if(esHoja(pages)){ const ots=parseHojas(pages);
+        if(!ots.length) rep={kind:'aviso',name:file.name,msg:'Se reconoció una hoja de trabajos y costos, pero no se pudo leer ninguna orden.'};
+        else if(rep&&rep.kind==='hojas'){ const k=new Set(rep.ots.map(o=>o.key)); ots.forEach(o=>{ if(!k.has(o.key)) rep.ots.push(o); }); rep.names.push(file.name); }
+        else rep={kind:'hojas',names:[file.name],ots,crear:false}; }
+      else pdfPreview(file.name,pages);
+    }else{ rep={kind:'aviso',name:file.name,msg:'Formato no admitido. Se pueden cargar .xlsx (cambio de turno), .docx y .pdf (informe de indicadores).'}; }
+  }catch(e){ rep=null; toast('No se pudo leer: '+e.message); }
+}
+function rosterPreview(name,aoa){
+  const p=parseRoster(aoa);
+  rep=Object.assign({kind:'roster',name,usarFlota:true,pendBack:false},p);
+  if(!rep.rows.length) rep={kind:'aviso',name,msg:'No se encontraron trabajos en la tabla del cambio de turno.'};
+}
+function rosterTrabajos(R){
+  const fin=R.fecha, ini=addDays(fin,-(DIAS_TURNO-1)); let ajust=0;
+  return R.rows.map(x=>{
+    let f=x.dia, est=false; if(!f||f<ini||f>fin){ f=fin; est=true; ajust++; }
+    const c=claseTrabajo(x);
+    return {fecha:f,fechaEst:est,unidad:x.unidad,condicion:c.condicion,reparacion:c.reparacion,
+      descripcion:(x.tipo+(x.rep?' — '+x.rep:'')).slice(0,400),horas:x.t,hh:x.hh,nroRoster:x.nro,
+      rosterKey:slug(R.sup||R.supTxt)+'|'+fin+'|'+x.nro+'|'+x.unidad};
+  });
+}
+function vInforme(){
+  if(!rep) return '';
+  const cancelar=`<button class="btn-secondary" onclick="rep=null;render()">Cancelar</button>`;
+  if(rep.kind==='aviso') return `<div class="alert alert-info"><b>${esc(rep.name)}</b><br>${esc(rep.msg)}</div><div class="btn-row"><button class="btn-secondary" onclick="rep=null;render()">Entendido</button></div>`;
+  if(rep.kind==='roster'){
+    const R=rep, tr=rosterTrabajos(R), prog=tr.filter(x=>x.condicion==='programado').length, hh=R.rows.reduce((s,x)=>s+(x.hh||0),0);
+    const fin=R.fecha, ini=fin?addDays(fin,-(DIAS_TURNO-1)):'';
+    const ya=new Set(Object.values(S.trabajos).map(x=>x.rosterKey).filter(Boolean)); const dup=tr.filter(x=>ya.has(x.rosterKey)).length;
+    const nf=fin?flotaOT.filter(o=>{ const f=o.fecha_iso||toISO(o.fecha); return o.tipo!=='Venta'&&f>=ini&&f<=fin; }).length:0;
+    let h=`<div class="alert alert-info"><b>Cambio de turno · ${esc(R.name)}</b><br>${R.rows.length} trabajo(s) (${prog} programados, ${R.rows.length-prog} imprevistos) · ${fnum(hh,0)} hs hombre · ${R.pend.length} tarea(s) pendiente(s)</div>`;
+    h+=`<div class="fg"><label class="fl">Supervisor</label><select class="fs" onchange="rep.sup=this.value;render()"><option value="">— elegir —</option>${SUP_NOMBRES.map(n=>`<option ${R.sup===n?'selected':''}>${n}</option>`).join('')}</select>${R.sup?'':`<div class="note">En el archivo figura "${esc(R.supTxt)}": elegilo.</div>`}</div>`;
+    h+=`<div class="fg"><label class="fl">Fecha del roster (último día del turno de 14 días)</label><input class="fi" type="date" value="${esc(R.fecha)}" onchange="rep.fecha=this.value;render()"></div>`;
+    if(fin) h+=`<div class="note">Se cargará en el turno ${esc(R.sup||'—')} del ${fmtD(ini)} al ${fmtD(fin)} (se crea si no existe).${tr.some(x=>x.fechaEst)?' '+tr.filter(x=>x.fechaEst).length+' trabajo(s) no traen fecha propia válida y quedan con la fecha del roster.':''}${dup?` <b>${dup} ya estaban cargados y se omiten.</b>`:''}</div>`;
+    h+=`<label class="chk-row" style="display:flex;gap:8px;align-items:center;margin:8px 0;"><input type="checkbox" class="chk" ${R.usarFlota?'checked':''} onchange="rep.usarFlota=this.checked"> Completar repuestos y facturación con las OT de Flota (${nf} OT en el período, se emparejan por patente y fecha)</label>`;
+    if(R.pend.length) h+=`<label class="chk-row" style="display:flex;gap:8px;align-items:center;margin:8px 0;"><input type="checkbox" class="chk" ${R.pendBack?'checked':''} onchange="rep.pendBack=this.checked"> Cargar las ${R.pend.length} tareas pendientes como backlogs (marcar solo si ya fueron realizadas)</label>`;
+    h+=`<div class="ev-list">${tr.slice(0,40).map(x=>`<div class="ev-card"><div class="ev-stripe ${x.condicion==='programado'?'sc-pm1':'sc-pm7'}"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(x.unidad)}</div><div class="ev-date">${fmtDC(x.fecha)}${x.fechaEst?'*':''}</div></div><div class="ev-row2"><span class="badge ${x.condicion==='programado'?'pm1':'pm7'}">${x.condicion==='programado'?'Programado':'Imprevisto'}</span><span class="ev-area">${esc(x.reparacion)}</span></div><div class="ev-obs">${esc(x.descripcion.slice(0,90))}${x.hh!=null?' · '+x.hh+' hs h.':''}</div></div></div>`).join('')}</div>${tr.length>40?`<div class="note">… y ${tr.length-40} más.</div>`:''}`;
+    h+=`<div class="btn-row wr" style="margin-top:10px;">${cancelar}<button class="btn-primary" onclick="importarRoster()">Importar al turno</button></div>`;
+    return h;
+  }
+  if(rep.kind==='hojas') return vHojas();
+  if(rep.kind==='pdf'){
+    const R=rep; const pairs=emparejar(pdfCandidatos(),R.ots);
+    let h=`<div class="alert alert-info"><b>Informe de indicadores · ${esc(R.name)}</b><br>${esc(R.mes||'')} · ${R.ots.length} OT en el detalle · ${R.hh.length} registro(s) de horas hombre por roster</div>`;
+    h+=`<div class="note">De este PDF se aprovechan: (1) los repuestos y N° de OT de cada intervención, que se agregan a los trabajos ya cargados del mismo equipo y fecha; (2) las horas hombre disponibles por roster. El PDF recorta las listas largas de repuestos ("…"), por eso para facturación y repuestos completos conviene usar las OT de Flota.</div>`;
+    h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys">Trabajos cargados que se completan: <b>${pairs.length}</b><div class="ev-int">Roster/horas que se actualizan: ${R.hh.map(x=>esc(x.sup)+' '+x.cons+'/'+x.disp+' hs').join(' · ')||'—'}</div></div></div></div>`;
+    if(!pairs.length) h+=`<div class="note">No hay trabajos cargados que coincidan. Primero cargá los cambios de turno (Excel) del mismo período.</div>`;
+    h+=`<div class="btn-row wr">${cancelar}<button class="btn-primary" onclick="aplicarPdf()">Aplicar al sistema</button></div>`;
+    return h;
+  }
+  return '';
+}
+function pdfCandidatos(){ return Object.values(S.trabajos).filter(t=>!t.otKey&&!t.ot); }
+function importarRoster(){
+  const R=rep; if(!R||R.kind!=='roster') return;
+  if(!R.sup){ toast('Elegí el supervisor'); return; } if(!R.fecha){ toast('Falta la fecha del roster'); return; }
+  const fin=R.fecha, ini=addDays(fin,-(DIAS_TURNO-1));
+  let T=Object.values(S.turnos).find(t=>t.supervisor===R.sup&&t.inicio===ini);
+  const nuevoT=!T; if(!T) T={id:uid('t'),supervisor:R.sup,inicio:ini,fin,obs:''};
+  Object.assign(T,{hsTurno:R.hsTurno,tecnicos:R.tecnicos||'',grupo:R.grupo||''}); put('turnos',T);
+  const ya=new Set(Object.values(S.trabajos).map(x=>x.rosterKey).filter(Boolean));
+  const nuevos=rosterTrabajos(R).filter(x=>!ya.has(x.rosterKey)).map(x=>Object.assign({id:uid('w'),turnoId:T.id,ot:'',repuestos:[],moFact:null,repFact:null,origen:'roster',creado:Date.now()},x));
+  let enr=0;
+  if(R.usarFlota&&flotaOT.length){ emparejar(nuevos,otsFlotaNorm()).forEach(([t,o])=>{ aplicarPar(t,o); enr++; }); }
+  nuevos.forEach(t=>put('trabajos',t));
+  let nb=0;
+  if(R.pendBack){ const yb=new Set(Object.values(S.backlogs).map(x=>x.rosterKey).filter(Boolean));
+    R.pend.forEach((p,i)=>{ const k='p|'+slug(R.sup)+'|'+fin+'|'+i+'|'+p.unidad; if(yb.has(k)) return; put('backlogs',{id:uid('b'),turnoId:T.id,fecha:fin,unidad:p.unidad,ot:'',descripcion:((p.titulo?p.titulo+': ':'')+p.detalle).slice(0,400),origen:'roster',rosterKey:k,creado:Date.now()}); nb++; }); }
+  selT=T.id; localStorage.setItem('pv_sel',selT);
+  const omit=R.rows.length-nuevos.length; rep=null;
+  toast(nuevos.length+' trabajo(s) importados'+(nuevoT?' · turno creado':'')+(enr?' · '+enr+' con datos de Flota':'')+(nb?' · '+nb+' backlog(s)':'')+(omit?' · '+omit+' ya existían':''));
+  curTab='turno'; document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===curTab)); render();
+}
+/* PDF de indicadores: lectura por posición de columnas */
+function parsePdfInd(pages){
+  const ots=[], hh=[]; let mes='', det=false, cur=null, xRep=null;
+  pages.forEach(items=>{
+    const ys=[...new Set(items.filter(i=>i.s.trim()).map(i=>Math.round(i.y)))].sort((a,b)=>b-a); const bucket={}; let prev=null, b=null;
+    ys.forEach(y=>{ if(prev!=null&&prev-y<=2) bucket[y]=b; else { b=y; bucket[y]=y; } prev=y; });
+    const lines={}; items.forEach(i=>{ if(!i.s.trim()) return; const k=bucket[Math.round(i.y)]; (lines[k]=lines[k]||[]).push(i); });
+    Object.keys(lines).map(Number).sort((a,b)=>b-a).forEach(k=>{
+      const L=lines[k].sort((a,b)=>a.x-b.x), txt=L.map(i=>i.s).join(' ').replace(/\s+/g,' ').trim();
+      let m;
+      if(!mes&&(m=txt.match(/^Proyecto Vicu\S+\s+[—-]\s+(.+)$/))) mes=m[1];
+      if((m=txt.match(/^(\d{2}\/\d{2}\/\d{4}) (.+?) ([\d.,]+) hs ([\d.,]+) hs ([\d.,]+)%$/))) hh.push({fecha:toISO(m[1]),sup:m[2],cons:num(m[3]),disp:num(m[4]),util:num(m[5])});
+      if(/^Detalle de [oó]rdenes de trabajo/.test(txt)){ det=true; return; }
+      if(!det) return;
+      if(/^Freddy El Taller/.test(txt)) return;
+      const hd=L.find(i=>/^Repuestos/.test(i.s)); if(hd&&/N° OT|OT/.test(txt)){ xRep=hd.x-8; return; }
+      if(xRep==null) return;
+      const isRow=/^\d+$/.test(L[0].s)&&L[1]&&/^\d{2}\/\d{2}\/\d{4}$/.test(L[1].s);
+      const right=L.filter(i=>i.x>=xRep).map(i=>i.s).join(' ');
+      if(isRow){ cur={nro:L[0].s,fecha:toISO(L[1].s),patente:(L[2]||{}).s||'',tipo:(L[3]||{}).s||'',lugar:(L[4]||{}).s||'',txt:right}; ots.push(cur); }
+      else if(cur&&L[0].x<xRep+300&&!/^(Resumen|Evoluci|Intervenciones|Horas hombre|Roster)/.test(txt)) cur.txt+=' '+right;
+    });
+  });
+  ots.forEach(o=>{
+    o.key='pdf'+o.nro+'|'+o.fecha; o.patente=o.patente.toUpperCase().trim(); o.pm=o.tipo==='PM'; o.repuestos=[];
+    o.txt.replace(/\s+/g,' ').split(';').map(s=>s.trim()).forEach(s=>{
+      if(!s||/^\(MO\)/i.test(s)||/…/.test(s)) return;
+      const m=s.match(/^(\d+(?:[.,]\d+)?)\s*[×x]\s*(.+)$/i); if(!m) return;
+      let d=m[2].trim(), cod=''; const mc=d.match(/\s(\d{5,})$/); if(mc){ cod=mc[1]; d=d.slice(0,mc.index).trim(); }
+      o.repuestos.push({cant:num(m[1]),desc:d,codigo:cod,precio:null});
+    });
+  });
+  return {mes,ots,hh};
+}
+function pdfPreview(name,pages){
+  const p=parsePdfInd(pages);
+  if(!p.ots.length&&!p.hh.length){ rep={kind:'aviso',name,msg:'No se reconoció el formato de "Informe completo de indicadores" de Flota Vicuña en este PDF.'}; return; }
+  rep=Object.assign({kind:'pdf',name},p);
+}
+function aplicarPdf(){
+  const R=rep; if(!R||R.kind!=='pdf') return;
+  const pairs=emparejar(pdfCandidatos(),R.ots); pairs.forEach(([t,o])=>aplicarPar(t,o));
+  let nh=0;
+  R.hh.forEach(x=>{ const t=Object.values(S.turnos).find(t=>t.fin===x.fecha&&norm(x.sup).split(' ').some(w=>w&&norm(t.supervisor).includes(w)&&w.length>3)); if(t){ t.hhReal=x.cons; t.hsDisp=x.disp; put('turnos',t); nh++; } });
+  rep=null; toast(pairs.length+' trabajo(s) completados'+(nh?' · horas hombre de '+nh+' roster':'')); render();
+}
+
+/* ═══════════ HOJAS DE EXPLICACIÓN DE TRABAJOS Y COSTOS (OT valorizadas en PDF) ═══════════ */
+function pdfLineas(items){
+  const ys=[...new Set(items.filter(i=>i.s.trim()).map(i=>Math.round(i.y)))].sort((a,b)=>b-a); const bucket={}; let prev=null,b=null;
+  ys.forEach(y=>{ if(prev!=null&&prev-y<=2) bucket[y]=b; else { b=y; bucket[y]=y; } prev=y; });
+  const lines={}; items.forEach(i=>{ if(!i.s.trim()) return; const k=bucket[Math.round(i.y)]; (lines[k]=lines[k]||[]).push(i); });
+  return Object.keys(lines).map(Number).sort((a,b)=>b-a).map(k=>lines[k].sort((a,b)=>a.x-b.x).map(i=>i.s).join(' ').replace(/\s+/g,' ').trim());
+}
+function esHoja(pages){ return pages.some(p=>p.some(i=>/HOJA DE EXPLICACI[ÓO]N DE TRABAJOS Y COSTOS/i.test(i.s))); }
+function parseHojas(pages){
+  const lines=[]; pages.forEach(p=>pdfLineas(p).forEach(l=>lines.push(l)));
+  const ots=[]; let o=null, sec='', com=false, req=false, pend=[], m;
+  const PR=/^(.*?)\s*\$\s*([\d.]+,\d{2})\s+USD\s*([\d.]+,\d{2})$/;
+  lines.forEach(l=>{
+    if((m=l.match(/HOJA DE EXPLICACI[ÓO]N DE TRABAJOS Y COSTOS\s*N[°º]?\s*(\d+)/i))){
+      if(!(o&&o.nro===m[1])){ o={nro:m[1],fecha:'',entrega:'',patente:'',modelo:'',km:'',sector:'',asesor:'',req:'',sup:'',tec:'',fechaTrab:'',desc:'',rep:[],mo:[],sub:null,total:null}; ots.push(o); }
+      sec=''; com=false; req=false; pend=[]; return; }
+    if(!o) return;
+    if((m=l.match(/Recepci[oó]n\s+Fecha\s+(\S+)\s+Entrega\s+(\S+)/i))){ o.fecha=toISO(m[1]); o.entrega=toISO(m[2]); return; }
+    if((m=l.match(/Patente\s+([A-Z0-9]{5,8})/))) o.patente=m[1];
+    if((m=l.match(/Modelo\s+(.+?)(?:\s+Km\s+(\d+))?$/))){ o.modelo=m[1]; if(m[2]) o.km=m[2]; }
+    if((m=l.match(/\bSector\s+(\S+)/))) o.sector=m[1];
+    if((m=l.match(/^Asesor de Servicio\s+(.+)$/i))){ o.asesor=m[1]; return; }
+    if(/^Requerimientos/i.test(l)){ req=true; return; }
+    if((m=l.match(/^(SUBTOTAL|PRECIO TOTAL)\s+\$\s*([\d.,]+)\s+USD\s*([\d.,]+)/i))){ const v={pesos:num(m[2]),usd:num(m[3])}; if(/^SUBTOTAL/i.test(m[1])) o.sub=v; else o.total=v; com=false; sec=''; return; }
+    if(/^(Repuestos|Trabajos|Mano de Obra|Servicios|Terceros)\b/i.test(l)&&!PR.test(l)){ sec=/^Repuestos/i.test(l)?'rep':'mo'; req=false; pend=[]; return; }
+    if(/^Comentarios$/i.test(l)){ com=true; sec=''; return; }
+    if(req){ if(!/^Origen:/i.test(l)) o.req+=(o.req?' ':'')+l; return; }
+    if(com){
+      if(/UNI\.?$/.test(l)||/^Precio Pesos/i.test(l)) return;
+      if((m=l.match(/^(DOM|KM|TEC|SUP|FECHA):?\s*(.*)$/i))){ const k=m[1].toUpperCase(); if(k==='SUP') o.sup=m[2]; else if(k==='TEC') o.tec=m[2]; else if(k==='FECHA') o.fechaTrab=toISO(m[2]); return; }
+      o.desc+=(o.desc?' ':'')+l.replace(/^\*+\s*/,''); return; }
+    if(sec){
+      if((m=l.match(PR))){
+        const pre=m[1].trim(); if(/^Total$/i.test(pre)) return;
+        let cant=1, codigo='', desc='';
+        if(sec==='rep'){
+          const mc=pre.match(/^(.*?)\s*(\d+(?:,\d+)?)$/); if(!mc) return;
+          cant=num(mc[2])||1; const parts=mc[1].trim().split(/\s+/).filter(Boolean); if(!parts.length) return;
+          codigo=parts[0]; desc=parts.length>1?parts.slice(1).join(' '):(pend.length?pend[pend.length-1]:'');
+        }else desc=pre;
+        (sec==='rep'?o.rep:o.mo).push({codigo,desc,cant,pesos:num(m[2]),usd:num(m[3])}); pend=[]; return; }
+      if(sec==='rep'&&!/^Art[ií]culo/i.test(l)) pend.push(l);
+    }
+  });
+  const out=new Map();
+  ots.forEach(o=>{
+    if(!o.patente) return;
+    ['pesos','usd'].forEach(k=>{});
+    o.repTot={pesos:o.rep.reduce((s,r)=>s+r.pesos,0),usd:o.rep.reduce((s,r)=>s+r.usd,0)};
+    const sub=o.sub||{pesos:o.repTot.pesos+o.mo.reduce((s,r)=>s+r.pesos,0),usd:o.repTot.usd+o.mo.reduce((s,r)=>s+r.usd,0)};
+    o.moTot={pesos:Math.max(0,Math.round((sub.pesos-o.repTot.pesos)*100)/100),usd:Math.max(0,Math.round((sub.usd-o.repTot.usd)*100)/100)};
+    o.fechaTrab=o.fechaTrab||o.fecha; o.fecha=o.fechaTrab||o.fecha;
+    o.pm=/\bPM\b|preventiv|inspecci[oó]n mensual/i.test(o.req+' '+o.desc);
+    o.patente=o.patente.toUpperCase(); o.key='hoja|'+o.nro+'|'+o.patente+'|'+o.fecha;
+    out.set(o.key,o);
+  });
+  return [...out.values()];
+}
+function hojaMonto(o,k){ const c=cfg('moneda')==='USD'?'usd':'pesos'; return k==='rep'?o.repTot[c]:o.moTot[c]; }
+function hojaSup(o){ return supDeTexto(o.asesor+' '+o.sup); }
+function hojasPendientes(R){ const ya=new Set(Object.values(S.trabajos).map(t=>t.hojaKey).filter(Boolean)); return R.ots.filter(o=>!ya.has(o.key)); }
+function hojasPlan(R){
+  const pend=hojasPendientes(R);
+  const pairs=emparejar(Object.values(S.trabajos).filter(t=>!t.hojaKey),pend.map(o=>({key:o.key,nro:o.nro,patente:o.patente,fecha:o.fecha,pm:o.pm,o})));
+  const usadas=new Set(pairs.map(p=>p[1].key));
+  const sin=pend.filter(o=>!usadas.has(o.key));
+  const crear=sin.map(o=>{ const s=hojaSup(o); const t=s&&Object.values(S.turnos).find(t=>t.supervisor===s&&enTurno(t,o.fecha)); return t?{o,t}:null; }).filter(Boolean);
+  return {pend,pairs,sin,crear,ya:R.ots.length-pend.length};
+}
+function vHojas(){
+  const R=rep, P=hojasPlan(R), oc=ocultarCostos();
+  let h=`<div class="alert alert-info"><b>Órdenes de trabajo valorizadas</b> · ${esc(R.names.join(', '))}<br>${R.ots.length} OT leídas${P.ya?' ('+P.ya+' ya aplicadas antes)':''}${oc?'':' · repuestos '+fm(R.ots.reduce((s,o)=>s+hojaMonto(o,'rep'),0))+' · mano de obra '+fm(R.ots.reduce((s,o)=>s+hojaMonto(o,'mo'),0))}</div>`;
+  h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys">Se completan en trabajos ya cargados (misma patente y fecha): <b>${P.pairs.length}</b><div class="ev-int">Sin trabajo en ningún cambio de turno: ${P.sin.length}${P.crear.length?' · de ellas ' +P.crear.length+' caen en un turno de Manzini o Quiroga':''}</div></div></div></div>`;
+  if(P.crear.length) h+=`<label class="chk-row" style="display:flex;gap:8px;align-items:center;margin:8px 0;"><input type="checkbox" class="chk" ${R.crear?'checked':''} onchange="rep.crear=this.checked"> Crear como trabajos las ${P.crear.length} OT que no figuran en el cambio de turno (se asignan al turno del supervisor que figura en la OT)</label>`;
+  h+=`<div class="ev-list">${R.ots.slice(0,40).map(o=>{ const ok=P.pairs.some(p=>p[1].key===o.key), ya=!P.pend.includes(o); return `<div class="ev-card"><div class="ev-stripe ${o.pm?'sc-pm1':'sc-pm7'}"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(o.patente)} <span class="ev-int">OT ${esc(o.nro)}</span></div><div class="ev-date">${fmtDC(o.fecha)}</div></div><div class="ev-row2"><span class="badge ${o.pm?'pm1':'pm7'}">${o.pm?'PM':'Correctivo'}</span><span class="ev-area">${esc(hojaSup(o)||o.asesor||'')}</span><span class="badge ${ya||ok?'st-cumpl':''}">${ya?'Ya aplicada':ok?'Coincide con trabajo':'Sin coincidencia'}</span></div><div class="ev-obs">${o.rep.length} repuesto(s)${oc?'':' · Rep. '+fm(hojaMonto(o,'rep'))+' · MO '+fm(hojaMonto(o,'mo'))}</div></div></div>`; }).join('')}</div>${R.ots.length>40?`<div class="note">… y ${R.ots.length-40} más.</div>`:''}`;
+  h+=`<div class="btn-row wr" style="margin-top:10px;"><button class="btn-secondary" onclick="rep=null;render()">Cancelar</button><button class="btn-primary" onclick="aplicarHojas()">Aplicar al sistema</button></div><div class="note">Los repuestos, cantidades e importes salen línea por línea de cada orden. Podés sumar más archivos: elegí otro PDF y se agregan a esta lista.</div>`;
+  return h;
+}
+function aplicarHojas(){
+  const R=rep; if(!R||R.kind!=='hojas') return; const P=hojasPlan(R), oc=ocultarCostos(), c=cfg('moneda')==='USD'?'usd':'pesos';
+  const reps=o=>o.rep.map(r=>({codigo:r.codigo,desc:r.desc,cant:r.cant,precio:oc?null:Math.round(r[c]/(r.cant||1)*100)/100}));
+  const llenar=(t,o)=>{ t.ot=o.nro; t.repuestos=reps(o); if(!oc){ t.repFact=hojaMonto(o,'rep'); t.moFact=hojaMonto(o,'mo'); } t.hojaKey=o.key; if(!t.otKey) t.otKey=o.key; if(t.fechaEst&&o.fecha){ t.fecha=o.fecha; t.fechaEst=false; } t.origen=(t.origen||'roster').replace(/\+hoja/,'')+'+hoja'; };
+  P.pairs.forEach(([t,x])=>{ llenar(t,x.o); put('trabajos',t); });
+  let nc=0;
+  if(R.crear) P.crear.forEach(({o,t})=>{ const d=o.desc||o.req; const nt={id:uid('w'),turnoId:t.id,fecha:o.fecha,unidad:o.patente,condicion:o.pm?'programado':'imprevisto',reparacion:clasificarRep(d+' '+o.rep.map(r=>r.desc).join(' '),o.pm?'PM':''),descripcion:String(d).slice(0,400),horas:null,hh:null,moFact:null,repFact:null,creado:Date.now()}; llenar(nt,o); nt.origen='hoja'; put('trabajos',nt); nc++; });
+  rep=null; toast(P.pairs.length+' trabajo(s) completados con repuestos y costos'+(nc?' · '+nc+' creados':'')); render();
+}
+
 /* ═══════════ INFORMES (formato Freddy) ═══════════ */
 function vInformes(c){
   const t=turnoSel(); let h=selTurnoHTML();
@@ -655,7 +976,7 @@ function buildTurnoReport(tid){
   const secs=[];
   secs.push({h:'1. RESUMEN DE KPI',blocks:[{table:{head:['Indicador','Valor'],widths:[3,1.4],rows:[
     ['Trabajos realizados durante el turno',k.total],['   Programados',k.prog+' ('+fpct(k.pProg)+')'],['   Imprevistos',k.imprev],
-    ['Repuestos utilizados (unidades / líneas)',fnum(k.repUnid,2)+' / '+k.repLineas],['Backlogs realizados',k.backlogs],
+    ['Repuestos utilizados (unidades / líneas)',fnum(k.repUnid,2)+' / '+k.repLineas],['Backlogs realizados',k.backlogs],...(k.hh>0?[['Horas hombre consumidas / disponibles',fnum(k.hh,0)+' / '+fnum(k.hsDisp,0)+' ('+fpct(k.util)+')']]:[]),
     ['Inspecciones de control de calidad realizadas',k.qcTotal],['   Conformes / con observaciones / no conformes',k.qcOk+' / '+k.qcObs+' / '+k.qcNok+' ('+fpct(k.pQC)+' conformes)'],
     ['Facturado en mano de obra ('+M+')',fm(k.mo)],['Facturado en repuestos ('+M+')',fm(k.rep)],['Total facturado en el turno ('+M+')',fm(k.fact)]]}}]});
   const tp=Object.keys(k.porTipo).sort();
