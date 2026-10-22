@@ -156,7 +156,8 @@ body[data-role="lectura"] .btn-add-nav, body[data-role="lectura"] .fab, body[dat
 .mc-day.today { background:var(--red); color:white; font-weight:700; border-radius:50%; width:30px; height:30px; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:auto; padding:0; }
 .mc-dots { display:flex; justify-content:center; align-items:center; gap:3px; min-height:8px; margin-top:2px; }
 .mc-dots span, .cal-leg i { width:5px; height:5px; border-radius:50%; display:block; }
-.dot-prev { background:#34C759; } .dot-org { background:#FF6B00; } .dot-pur { background:#5856D6; } .dot-cumpl { background:#0A6EBD; }
+.dot-red { background:var(--red); } .dot-prev { background:#34C759; } .dot-cumpl { background:#0A6EBD; }
+.cal-i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
 .mc-day.today .mc-dots span, .mc-day.sel .mc-dots span { background:rgba(255,255,255,0.85) !important; }
 .mc-day.om { opacity:.22; pointer-events:none; }
 .mc-day.sel:not(.today) { background:rgba(204,0,0,0.15); border:1.5px solid var(--red); border-radius:50%; width:30px; height:30px; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:auto; padding:0; color:var(--red); font-weight:700; }
@@ -1105,11 +1106,16 @@ function vCalendario(c){
     let cls='mc-day'; if(ds===hoy) cls+=' today'; if(calDia===ds) cls+=' sel';
     if(t&&enTurno(t,ds)) cls+=' inturno';
     const s=dots[ds]; let dh='';
-    if(s){ if(s.has('prog')) dh+='<span class="dot-prev"></span>'; if(s.has('imprev')) dh+='<span class="dot-org"></span>'; if(s.has('bk')) dh+='<span class="dot-pur"></span>'; if(s.has('qc')) dh+='<span class="dot-cumpl"></span>'; }
+    if(s){ if(s.has('imprev')) dh+='<span class="dot-red"></span>'; if(s.has('prog')) dh+='<span class="dot-prev"></span>'; if(s.has('bk')||s.has('qc')) dh+='<span class="dot-cumpl"></span>'; }
     h+=`<div class="${cls}" onclick="calSel('${ds}')">${d}${dh?`<div class="mc-dots">${dh}</div>`:''}</div>`;
   }
   const rem=42-first-days; for(let d=1;d<=rem;d++) h+=`<div class="mc-day om">${d}</div>`;
-  h+=`</div><div class="cal-leg"><span><i class="dot-prev"></i>Programado</span><span><i class="dot-org"></i>Imprevisto</span><span><i class="dot-pur"></i>Backlog</span><span><i class="dot-cumpl"></i>Calidad</span></div></div>`;
+  h+=`</div><div class="cal-leg"><span><i class="dot-red"></i>Imprevisto</span><span><i class="dot-prev"></i>Programado</span><span><i class="dot-cumpl"></i>Backlog / Calidad</span></div></div>
+  <div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>Referencias del calendario</b>
+    <div class="ev-int"><i class="dot-red cal-i"></i> Rojo: hay trabajos imprevistos (correctivos) realizados ese día.</div>
+    <div class="ev-int"><i class="dot-prev cal-i"></i> Verde: hay trabajos programados (PM, inspección mensual).</div>
+    <div class="ev-int"><i class="dot-cumpl cal-i"></i> Azul: hay backlogs realizados o inspecciones de control de calidad.</div>
+    <div class="ev-int">Un día puede tener varios puntos. Círculo rojo lleno: hoy. Círculo rojo suave: día elegido. Franja rosada: turno del supervisor elegido arriba.</div></div></div></div>`;
   if(t) h+=`<div class="note">Franja resaltada: turno de ${esc(t.supervisor)} (${fmtD(t.inicio)} al ${fmtD(t.fin)}).</div>`;
   const dia=calDia||'';
   if(dia){
@@ -1118,9 +1124,9 @@ function vCalendario(c){
     h+=`<div class="sec-hdr">${fmtD(dia)}</div>`;
     if(!tr.length&&!bl.length&&!qc.length) h+=`<div class="note">Sin registros ese día.</div>`;
     h+=`<div class="ev-list">`;
-    tr.forEach(x=>{ const p=x.condicion==='programado'; h+=`<div class="ev-card" onclick="selT='${x.turnoId}';localStorage.setItem('pv_sel',selT);fTrabajo('${x.id}')"><div class="ev-stripe ${p?'sc-pm1':'sc-pm7'}"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(x.unidad)}${x.ot?` <span class="ev-int">OT ${esc(x.ot)}</span>`:''}</div><div class="ev-date">${esc(sup(x))}</div></div><div class="ev-row2"><span class="badge ${p?'pm1':'pm7'}">${p?'Programado':'Imprevisto'}</span><span class="ev-area">${esc(x.reparacion||'')}</span></div>${x.descripcion?`<div class="ev-obs">${esc(x.descripcion)}</div>`:''}</div></div>`; });
-    bl.forEach(x=>{ h+=`<div class="ev-card"><div class="ev-stripe sc-pm5"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(x.unidad)}</div><div class="ev-date">${esc(sup(x))}</div></div><div class="ev-row2"><span class="badge pm5">Backlog</span></div><div class="ev-obs">${esc(x.descripcion||'')}</div></div></div>`; });
-    qc.forEach(x=>{ h+=`<div class="ev-card"><div class="ev-stripe sc-pm2"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(x.unidad)}</div><div class="ev-date">${esc(sup(x))}</div></div><div class="ev-row2"><span class="badge pm2">Calidad</span><span class="ev-area">${esc(x.resultado||'')}</span></div></div></div>`; });
+    tr.forEach(x=>{ const p=x.condicion==='programado'; h+=`<div class="ev-card" onclick="selT='${x.turnoId}';localStorage.setItem('pv_sel',selT);fTrabajo('${x.id}')"><div class="ev-stripe ${p?'sc-pm2':'sc-pm4'}"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(x.unidad)}${x.ot?` <span class="ev-int">OT ${esc(x.ot)}</span>`:''}</div><div class="ev-date">${esc(sup(x))}</div></div><div class="ev-row2"><span class="badge ${p?'pm2':'pm4'}">${p?'Programado':'Imprevisto'}</span><span class="ev-area">${esc(x.reparacion||'')}</span></div>${x.descripcion?`<div class="ev-obs">${esc(x.descripcion)}</div>`:''}</div></div>`; });
+    bl.forEach(x=>{ h+=`<div class="ev-card"><div class="ev-stripe sc-pm1"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(x.unidad)}</div><div class="ev-date">${esc(sup(x))}</div></div><div class="ev-row2"><span class="badge pm1">Backlog</span></div><div class="ev-obs">${esc(x.descripcion||'')}</div></div></div>`; });
+    qc.forEach(x=>{ h+=`<div class="ev-card"><div class="ev-stripe sc-pm1"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(x.unidad)}</div><div class="ev-date">${esc(sup(x))}</div></div><div class="ev-row2"><span class="badge pm1">Calidad</span><span class="ev-area">${esc(x.resultado||'')}</span></div></div></div>`; });
     h+=`</div>`;
   }else h+=`<div class="note">Tocá un día para ver los trabajos, backlogs e inspecciones de esa fecha.</div>`;
   c.innerHTML=h;
