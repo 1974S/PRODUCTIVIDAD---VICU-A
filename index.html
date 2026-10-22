@@ -369,7 +369,7 @@ function otCargar(v){
   flotaOT=out;
   const dl=document.getElementById('patList'); if(dl){ dl.innerHTML=Object.keys(v||{}).sort().map(p=>'<option value="'+esc(p)+'">').join(''); }
 }
-function otSup(o){ for(const f of [o.asesor,o.tecnico,o.supervisor]){ const s=norm(f||''); if(!s) continue; for(const n of SUP_NOMBRES){ if(reSup(n).test(s)) return n; } } return null; }
+function otSup(o){ for(const f of [o.asesor,o.tecnico,o.supervisor]){ const s=norm(f||''); if(!s) continue; for(const n of SUP_NOMBRES){ if(reSup(n).test(s)) return n; } } if(/^sede\b|san juan/.test(norm(o.sector||''))) return SUP_MENSUAL; return null; }
 function clasificarRep(texto,tipo){
   if(tipo==='PM') return pick('PM 5.000 km');
   const t=String(texto||'');
@@ -734,6 +734,8 @@ function emparejar(trs,ots){
     ots.forEach(o=>{
       if(used.has(o.key)||o.patente!==t.unidad||!o.fecha) return;
       if(tur&&!enTurno(tur,o.fecha)) return;
+      if(tur&&o.sup&&o.sup!==tur.supervisor) return; // las OT de Sede (Ares) y de Mina repiten números y patentes: se separan por supervisor
+      if(tur&&o.mina&&tur.supervisor===SUP_MENSUAL) return;
       const d=t.fechaEst?2:Math.abs(diasDe(t.fecha)-diasDe(o.fecha)); if(d>3) return;
       const s=d+(o.pm===(t.condicion==='programado')?0:1.5); if(s<bs){ bs=s; best=o; }
     });
@@ -744,7 +746,7 @@ function emparejar(trs,ots){
 function otsFlotaNorm(){
   const ya=new Set(Object.values(S.trabajos).filter(x=>x.otKey).map(x=>x.otKey));
   return flotaOT.filter(o=>o.tipo!=='Venta'&&!ya.has(o.id)).map(o=>{ const m=otMontos(o);
-    return {key:o.id,nro:String(o.nro||''),patente:String(o.patente||'').toUpperCase().trim(),fecha:o.fecha_iso||toISO(o.fecha),pm:o.tipo==='PM',
+    return {key:o.id,nro:String(o.nro||''),patente:String(o.patente||'').toUpperCase().trim(),fecha:o.fecha_iso||toISO(o.fecha),pm:o.tipo==='PM',sup:otSup(o),
       repuestos:(o.repuestos||[]).map(r=>({codigo:r.codigo||'',desc:r.desc||'',cant:num(r.cant)||1,precio:null})),mo:m.mo,rep:m.rep,flota:true,txt:(o.trabajos||[]).map(x=>x.desc).filter(Boolean).join('; ').slice(0,400)}; });
 }
 function aplicarPar(t,o){
@@ -880,7 +882,7 @@ function parsePdfInd(pages){
     });
   });
   ots.forEach(o=>{
-    o.key='pdf'+o.nro+'|'+o.fecha; o.patente=o.patente.toUpperCase().trim(); o.pm=o.tipo==='PM'; o.repuestos=[];
+    o.key='pdf'+o.nro+'|'+o.fecha; o.patente=o.patente.toUpperCase().trim(); o.pm=o.tipo==='PM'; o.repuestos=[]; o.sup=/^sede/i.test(o.lugar)?SUP_MENSUAL:null; o.mina=/^mina/i.test(o.lugar);
     o.txt.replace(/\s+/g,' ').split(';').map(s=>s.trim()).forEach(s=>{
       if(!s||/^\(MO\)/i.test(s)||/…/.test(s)) return;
       const m=s.match(/^(\d+(?:[.,]\d+)?)\s*[×x]\s*(.+)$/i); if(!m) return;
@@ -962,11 +964,11 @@ function parseHojas(pages){
   return [...out.values()];
 }
 function hojaMonto(o,k){ const c=cfg('moneda')==='USD'?'usd':'pesos'; return k==='rep'?o.repTot[c]:o.moTot[c]; }
-function hojaSup(o){ return supDeTexto(o.asesor+' '+o.sup); }
+function hojaSup(o){ return supDeTexto(o.asesor)||supDeTexto(o.sup)||(/^sede\b/i.test(o.sector||'')?SUP_MENSUAL:''); }
 function hojasPendientes(R){ const ya=new Set(Object.values(S.trabajos).map(t=>t.hojaKey).filter(Boolean)); return R.ots.filter(o=>!ya.has(o.key)); }
 function hojasPlan(R){
   const pend=hojasPendientes(R);
-  const pairs=emparejar(Object.values(S.trabajos).filter(t=>!t.hojaKey),pend.map(o=>({key:o.key,nro:o.nro,patente:o.patente,fecha:o.fecha,pm:o.pm,o})));
+  const pairs=emparejar(Object.values(S.trabajos).filter(t=>!t.hojaKey),pend.map(o=>({key:o.key,nro:o.nro,patente:o.patente,fecha:o.fecha,pm:o.pm,sup:hojaSup(o)||null,mina:/^mina/i.test(o.sector||'')&&!hojaSup(o),o})));
   const usadas=new Set(pairs.map(p=>p[1].key));
   const sin=pend.filter(o=>!usadas.has(o.key));
   const crear=sin.map(o=>{ const s=hojaSup(o); const t=s&&Object.values(S.turnos).find(t=>t.supervisor===s&&enTurno(t,o.fecha)); return t?{o,t}:null; }).filter(Boolean);
