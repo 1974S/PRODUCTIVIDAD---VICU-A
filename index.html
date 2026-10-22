@@ -141,6 +141,27 @@ body { font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',san
 .toast { position:fixed; left:50%; bottom:calc(90px + var(--safe-b)); transform:translateX(-50%); background:#1C1C1E; color:#fff; padding:10px 16px; border-radius:20px; font-size:13px; z-index:300; opacity:0; pointer-events:none; transition:opacity .2s; max-width:88%; text-align:center; }
 .toast.show { opacity:1; }
 body[data-role="lectura"] .btn-add-nav, body[data-role="lectura"] .fab, body[data-role="lectura"] .wr { display:none !important; }
+
+/* Calendario (igual que Flota) */
+.mini-cal { background:var(--card); border-radius:var(--radius,14px); border:1px solid var(--border); padding:14px; margin-bottom:12px; }
+.mc-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.mc-title { font-size:15px; font-weight:700; }
+.mc-nav { display:flex; gap:4px; }
+.mc-btn { width:30px; height:30px; background:var(--bg); border:1px solid var(--border); border-radius:8px; font-size:16px; color:var(--text2); display:flex; align-items:center; justify-content:center; cursor:pointer; font-family:inherit; }
+.mc-btn:active { opacity:.6; }
+.mc-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+.mc-dow { font-size:10px; color:var(--text3); text-align:center; padding-bottom:4px; font-weight:600; }
+.mc-day { font-size:13px; text-align:center; padding:5px 2px; border-radius:8px; cursor:pointer; color:var(--text2); position:relative; }
+.mc-day.inturno { background:rgba(204,0,0,0.07); }
+.mc-day.today { background:var(--red); color:white; font-weight:700; border-radius:50%; width:30px; height:30px; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:auto; padding:0; }
+.mc-dots { display:flex; justify-content:center; align-items:center; gap:3px; min-height:8px; margin-top:2px; }
+.mc-dots span, .cal-leg i { width:5px; height:5px; border-radius:50%; display:block; }
+.dot-prev { background:#34C759; } .dot-org { background:#FF6B00; } .dot-pur { background:#5856D6; } .dot-cumpl { background:#0A6EBD; }
+.mc-day.today .mc-dots span, .mc-day.sel .mc-dots span { background:rgba(255,255,255,0.85) !important; }
+.mc-day.om { opacity:.22; pointer-events:none; }
+.mc-day.sel:not(.today) { background:rgba(204,0,0,0.15); border:1.5px solid var(--red); border-radius:50%; width:30px; height:30px; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:auto; padding:0; color:var(--red); font-weight:700; }
+.cal-leg { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:10px; font-size:10.5px; color:var(--text3); }
+.cal-leg span { display:flex; align-items:center; gap:4px; } .cal-leg i { width:7px; height:7px; display:inline-block; }
 </style>
 </head>
 <body>
@@ -161,6 +182,7 @@ body[data-role="lectura"] .btn-add-nav, body[data-role="lectura"] .fab, body[dat
     <div class="tabbar" id="tabbar">
       <button class="tab-btn active" data-tab="inicio" onclick="setTab('inicio',this)">Inicio</button>
       <button class="tab-btn" data-tab="turno" onclick="setTab('turno',this)">Turno</button>
+      <button class="tab-btn" data-tab="calendario" onclick="setTab('calendario',this)">Calendario</button>
       <button class="tab-btn" data-tab="flota" onclick="setTab('flota',this)">Flota</button>
       <button class="tab-btn" data-tab="informes" onclick="setTab('informes',this)">Informes</button>
       <button class="tab-btn" data-tab="ajustes" onclick="setTab('ajustes',this)">Ajustes</button>
@@ -218,7 +240,7 @@ let userRole=null;
 function soloLectura(){ if(userRole) return userRole==='lectura'; try{return sessionStorage.getItem('pv_role')==='lectura';}catch(e){return false;} }
 const esAdmin=()=>userRole==='admin';
 const ocultarCostos=()=>userRole==='carga';
-const TABS_POR_ROL={ carga:['turno','flota'], lectura:['inicio','turno','flota'] };
+const TABS_POR_ROL={ carga:['turno','calendario','flota'], lectura:['inicio','turno','calendario','flota'] };
 const tabPermitida=t=>{ const p=TABS_POR_ROL[userRole]; return !p||p.indexOf(t)>-1; };
 
 let db=null, fbOK=false, fbEstado='Sin conexión (datos locales)';
@@ -397,7 +419,7 @@ function setTab(t,el){ curTab=t; document.querySelectorAll('.tab-btn').forEach(b
 function render(){
   if(!tabPermitida(curTab)){ curTab=TABS_POR_ROL[userRole][0]; document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===curTab)); }
   const c=$('content'); const sc=c.scrollTop;
-  if(curTab==='inicio') vInicio(c); else if(curTab==='turno') vTurno(c); else if(curTab==='flota') vFlota(c); else if(curTab==='informes') vInformes(c); else vAjustes(c);
+  if(curTab==='inicio') vInicio(c); else if(curTab==='turno') vTurno(c); else if(curTab==='calendario') vCalendario(c); else if(curTab==='flota') vFlota(c); else if(curTab==='informes') vInformes(c); else vAjustes(c);
   c.scrollTop=sc;
 }
 function selTurnoHTML(){
@@ -1024,6 +1046,49 @@ function vSync(){
   const i=syncInfo; const st=!autoOK.rep||!autoOK.meta?'Esperando datos de Flota…':(i&&i.ro?'Modo lectura: ves lo que sincroniza el administrador':'Sincronizado');
   let h=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>Datos automáticos desde Flota Vicuña</b><div class="ev-int">${esc(st)}</div><div class="ev-int">${Object.keys(rostersMeta||{}).length} roster(s) · ${Object.keys(reparReales||{}).length} reparaciones · ${flotaOT.length} OT leídas</div></div>${soloLectura()?'':'<button class="btn-primary btn-sm wr" onclick="sincronizarAuto(true)">Sincronizar</button>'}</div><div class="plan-note">Los turnos, trabajos, horas hombre, repuestos y facturación se arman solos con los rosters y las OT que ya cargan en Flota. No hace falta subir archivos.</div></div>`;
   return h;
+}
+
+/* ═══════════ CALENDARIO (mismo diseño que Flota Vicuña) ═══════════ */
+const DOWS_CAL=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+let calMes=(()=>{ const d=new Date(); return {y:d.getFullYear(),m:d.getMonth()}; })(), calDia='';
+function calNav(n){ let m=calMes.m+n, y=calMes.y; if(m<0){ m=11; y--; } if(m>11){ m=0; y++; } calMes={y,m}; render(); }
+function calSel(ds){ calDia=(calDia===ds)?'':ds; render(); }
+function vCalendario(c){
+  const y=calMes.y, m=calMes.m, t=turnoSel();
+  const dots={}; const add=(f,k)=>{ if(f) (dots[f]=dots[f]||new Set()).add(k); };
+  Object.values(S.trabajos).forEach(x=>add(x.fecha,x.condicion==='programado'?'prog':'imprev'));
+  Object.values(S.backlogs).forEach(x=>add(x.fecha,'bk'));
+  Object.values(S.qc).forEach(x=>add(x.fecha,'qc'));
+  const turnosFin=new Set(Object.values(S.turnos).map(x=>x.fin));
+  const first=new Date(y,m,1).getDay(), days=new Date(y,m+1,0).getDate(), prev=new Date(y,m,0).getDate(), hoy=hoyISO();
+  let h=selTurnoHTML();
+  h+=`<div class="mini-cal"><div class="mc-head"><span class="mc-title">${MESES[m]} ${y}</span><div class="mc-nav"><button class="mc-btn" onclick="calNav(-1)">‹</button><button class="mc-btn" onclick="calNav(1)">›</button></div></div><div class="mc-grid">`;
+  DOWS_CAL.forEach(d=>{ h+=`<div class="mc-dow">${d[0]}</div>`; });
+  for(let i=first-1;i>=0;i--) h+=`<div class="mc-day om">${prev-i}</div>`;
+  for(let d=1;d<=days;d++){
+    const ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    let cls='mc-day'; if(ds===hoy) cls+=' today'; if(calDia===ds) cls+=' sel';
+    if(t&&enTurno(t,ds)) cls+=' inturno';
+    const s=dots[ds]; let dh='';
+    if(s){ if(s.has('prog')) dh+='<span class="dot-prev"></span>'; if(s.has('imprev')) dh+='<span class="dot-org"></span>'; if(s.has('bk')) dh+='<span class="dot-pur"></span>'; if(s.has('qc')) dh+='<span class="dot-cumpl"></span>'; }
+    h+=`<div class="${cls}" onclick="calSel('${ds}')">${d}${dh?`<div class="mc-dots">${dh}</div>`:''}</div>`;
+  }
+  const rem=42-first-days; for(let d=1;d<=rem;d++) h+=`<div class="mc-day om">${d}</div>`;
+  h+=`</div><div class="cal-leg"><span><i class="dot-prev"></i>Programado</span><span><i class="dot-org"></i>Imprevisto</span><span><i class="dot-pur"></i>Backlog</span><span><i class="dot-cumpl"></i>Calidad</span></div></div>`;
+  if(t) h+=`<div class="note">Franja resaltada: turno de ${esc(t.supervisor)} (${fmtD(t.inicio)} al ${fmtD(t.fin)}).</div>`;
+  const dia=calDia||'';
+  if(dia){
+    const tr=Object.values(S.trabajos).filter(x=>x.fecha===dia), bl=Object.values(S.backlogs).filter(x=>x.fecha===dia), qc=Object.values(S.qc).filter(x=>x.fecha===dia);
+    const sup=x=>{ const T=S.turnos[x.turnoId]; return T?T.supervisor.split(' ').pop():''; };
+    h+=`<div class="sec-hdr">${fmtD(dia)}</div>`;
+    if(!tr.length&&!bl.length&&!qc.length) h+=`<div class="note">Sin registros ese día.</div>`;
+    h+=`<div class="ev-list">`;
+    tr.forEach(x=>{ const p=x.condicion==='programado'; h+=`<div class="ev-card" onclick="selT='${x.turnoId}';localStorage.setItem('pv_sel',selT);fTrabajo('${x.id}')"><div class="ev-stripe ${p?'sc-pm1':'sc-pm7'}"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(x.unidad)}${x.ot?` <span class="ev-int">OT ${esc(x.ot)}</span>`:''}</div><div class="ev-date">${esc(sup(x))}</div></div><div class="ev-row2"><span class="badge ${p?'pm1':'pm7'}">${p?'Programado':'Imprevisto'}</span><span class="ev-area">${esc(x.reparacion||'')}</span></div>${x.descripcion?`<div class="ev-obs">${esc(x.descripcion)}</div>`:''}</div></div>`; });
+    bl.forEach(x=>{ h+=`<div class="ev-card"><div class="ev-stripe sc-pm5"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(x.unidad)}</div><div class="ev-date">${esc(sup(x))}</div></div><div class="ev-row2"><span class="badge pm5">Backlog</span></div><div class="ev-obs">${esc(x.descripcion||'')}</div></div></div>`; });
+    qc.forEach(x=>{ h+=`<div class="ev-card"><div class="ev-stripe sc-pm2"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(x.unidad)}</div><div class="ev-date">${esc(sup(x))}</div></div><div class="ev-row2"><span class="badge pm2">Calidad</span><span class="ev-area">${esc(x.resultado||'')}</span></div></div></div>`; });
+    h+=`</div>`;
+  }else h+=`<div class="note">Tocá un día para ver los trabajos, backlogs e inspecciones de esa fecha.</div>`;
+  c.innerHTML=h;
 }
 
 /* ═══════════ INFORMES (formato Freddy) ═══════════ */
