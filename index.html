@@ -298,9 +298,9 @@ function attachFirebase(){
       },err=>{ fbEstado='Sin permiso: '+err.message; });
     });
     db.ref('productividad/config').on('value',snap=>{ const v=snap.val(); if(v){ S.config=v; persist(); softRender(); } });
-    db.ref('ordenes_trabajo').on('value',snap=>{ otCargar(snap.val()); if(curTab==='flota') softRender(); agendarSync(); });
-    db.ref('reparaciones_reales').on('value',snap=>{ reparReales=snap.val()||{}; autoOK.rep=true; agendarSync(); },()=>{});
-    db.ref('rosters_meta').on('value',snap=>{ rostersMeta=snap.val()||{}; autoOK.meta=true; agendarSync(); },()=>{});
+    db.ref('ordenes_trabajo').on('value',snap=>{ otCargar(snap.val()); delete fbErr.ot; if(curTab==='flota') softRender(); agendarSync(); },e=>{ fbErr.ot=e.message; softRender(); });
+    db.ref('reparaciones_reales').on('value',snap=>{ reparReales=snap.val()||{}; autoOK.rep=true; delete fbErr.rep; agendarSync(); },e=>{ fbErr.rep=e.message; autoOK.rep=true; agendarSync(); });
+    db.ref('rosters_meta').on('value',snap=>{ rostersMeta=snap.val()||{}; autoOK.meta=true; delete fbErr.meta; agendarSync(); },e=>{ fbErr.meta=e.message; autoOK.meta=true; agendarSync(); });
   });
 }
 let rq=0; function softRender(){ if(rq) return; rq=requestAnimationFrame(()=>{ rq=0; if(userRole) render(); }); }
@@ -987,7 +987,7 @@ function aplicarHojas(){
 }
 
 /* ═══════════ SINCRONIZACIÓN AUTOMÁTICA DESDE FLOTA (sin carga manual) ═══════════ */
-let reparReales={}, rostersMeta={}, autoOK={rep:false,meta:false}, syncT=0, syncInfo=null;
+let fbErr={}, reparReales={}, rostersMeta={}, autoOK={rep:false,meta:false}, syncT=0, syncInfo=null;
 function agendarSync(){ clearTimeout(syncT); syncT=setTimeout(()=>{ try{ sincronizarAuto(); }catch(e){ console.error(e); } },900); }
 function descartado(k){ return (S.config.descartados||[]).includes(k); }
 function descartar(k){ const d=S.config.descartados||[]; if(!d.includes(k)){ S.config.descartados=[...d,k]; putCfg(); } }
@@ -1074,7 +1074,7 @@ function sincronizarOTs(){
 }
 function vSync(){
   const i=syncInfo; const st=!autoOK.rep||!autoOK.meta?'Esperando datos de Flota…':(i&&i.ro?'Modo lectura: ves lo que sincroniza el administrador':'Sincronizado');
-  let h=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>Datos automáticos desde Flota Vicuña</b><div class="ev-int">${esc(st)}</div><div class="ev-int">${Object.keys(rostersMeta||{}).length} roster(s) · ${Object.keys(reparReales||{}).length} reparaciones · ${flotaOT.length} OT leídas</div></div>${soloLectura()?'':'<button class="btn-primary btn-sm wr" onclick="sincronizarAuto(true)">Sincronizar</button>'}</div><div class="plan-note">Los turnos, trabajos, horas hombre, repuestos y facturación se arman solos con los rosters y todas las OT (también las antiguas) que ya están en Flota. Los períodos sin roster usan turnos estimados de 14 días. No hace falta subir archivos.</div></div>`;
+  let h=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>Datos automáticos desde Flota Vicuña</b><div class="ev-int">${esc(st)}</div><div class="ev-int">${db&&fbOK?'Conectado a Firebase':'Sin conexión a Firebase (datos locales)'}${Object.keys(fbErr).length?' · Errores: '+Object.entries(fbErr).map(([k,v])=>k+': '+esc(v)).join(' | '):''}</div><div class="ev-int">Rol: ${esc(NOMBRE_ROL[userRole]||userRole||'')}${soloLectura()?' (solo lectura: no sincroniza, solo muestra lo ya sincronizado)':''}</div><div class="ev-int">${Object.keys(rostersMeta||{}).length} roster(s) · ${Object.keys(reparReales||{}).length} reparaciones · ${flotaOT.length} OT leídas</div></div>${soloLectura()?'':'<button class="btn-primary btn-sm wr" onclick="sincronizarAuto(true)">Sincronizar</button>'}</div><div class="plan-note">Los turnos, trabajos, horas hombre, repuestos y facturación se arman solos con los rosters y todas las OT (también las antiguas) que ya están en Flota. Los períodos sin roster usan turnos estimados de 14 días. No hace falta subir archivos.</div></div>`;
   return h;
 }
 
