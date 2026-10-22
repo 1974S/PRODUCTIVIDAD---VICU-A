@@ -216,7 +216,9 @@ const firebaseConfig = {
   appId: "1:782992037492:web:b1a862de5ef5efd7342321"
 };
 const PIN_ADMIN='1974', PIN_CARGA='1984', PIN_LECTURA='2026';
-const SUPERVISORES = { 'Marcos Manzini':'manzini', 'Matias Quiroga':'quiroga' };
+const SUPERVISORES = { 'Marcos Manzini':'manzini', 'Matias Quiroga':'quiroga', 'Diego Ares':'ares' };
+const SUP_MENSUAL = 'Diego Ares'; // taller sede San Juan: período = mes calendario
+const reSup=n=>new RegExp('\\b'+SUPERVISORES[n]+'\\b');
 const SUP_NOMBRES = Object.keys(SUPERVISORES);
 const DIAS_TURNO = 14;
 const TIPOS_DEFAULT = ['PM 5.000 km','Inspección mensual','02-Motor','03-Embrague','04-Caja de cambios','05-Transmisión','06-Eje delantero / Dirección / Cubos / Ruedas','07-Freno','08-Suspensión','09-Sistema eléctrico','10-Cabina','11-Lavado completo','12-Cambio de pértiga','Otros'];
@@ -335,6 +337,8 @@ function dl(blob,name){ const a=document.createElement('a'); a.href=URL.createOb
 const slug=s=>norm(s).replace(/ /g,'_');
 
 /* ═══════════ TURNOS (período de 14 días del supervisor) ═══════════ */
+function periodoTurno(sup,ini){ if(sup===SUP_MENSUAL){ const [y,m]=ini.split('-').map(Number); const a=y+'-'+String(m).padStart(2,'0')+'-01'; return {inicio:a,fin:new Date(Date.UTC(y,m,0)).toISOString().slice(0,10)}; } return {inicio:ini,fin:addDays(ini,DIAS_TURNO-1)}; }
+function diasPeriodo(t){ return diasDe(t.fin)-diasDe(t.inicio)+1; }
 function turnosOrd(){ return Object.values(S.turnos).sort((a,b)=>(b.inicio||'').localeCompare(a.inicio||'')); }
 function turnoSel(){ if(selT&&S.turnos[selT]) return S.turnos[selT]; const t=turnosOrd(); return t[0]||null; }
 function tLabel(t){ return t.supervisor.split(' ').pop()+' · '+fmtDC(t.inicio)+' – '+fmtD(t.fin); }
@@ -351,7 +355,7 @@ function kpiTurno(tid){
     (x.repuestos||[]).forEach(r=>{ const c=num(r.cant); k.repUnid+=c; k.repLineas++; const key=(r.desc||r.codigo||'s/d').trim(); k.repAgg[key]=(k.repAgg[key]||0)+c; });
     k.mo+=num(x.moFact); k.rep+=repFact(x); k.hh+=num(x.hh);
   });
-  { const T=S.turnos[tid]; k.hsDisp=T?(num(T.hsDisp)||(num(T.hsTurno)*DIAS_TURNO)):0; k.util=k.hh>0?pct(k.hh,k.hsDisp):null; }
+  { const T=S.turnos[tid]; k.hsDisp=T?(num(T.hsDisp)||(num(T.hsTurno)*diasPeriodo(T))):0; k.util=k.hh>0?pct(k.hh,k.hsDisp):null; }
   k.qcSin=0; qc.forEach(q=>{ if(q.resultado==='No conforme') k.qcNok++; else if(q.resultado==='Con observaciones') k.qcObs++; else if(q.resultado==='Realizada') k.qcSin++; else k.qcOk++; });
   k.pProg=pct(k.prog,k.total); k.pQC=pct(k.qcOk,k.qcOk+k.qcObs+k.qcNok); k.fact=k.mo+k.rep;
   return k;
@@ -364,7 +368,7 @@ function otCargar(v){
   flotaOT=out;
   const dl=document.getElementById('patList'); if(dl){ dl.innerHTML=Object.keys(v||{}).sort().map(p=>'<option value="'+esc(p)+'">').join(''); }
 }
-function otSup(o){ const t=norm((o.asesor||'')+' '+(o.tecnico||'')+' '+(o.supervisor||'')); for(const n of SUP_NOMBRES){ if(t.includes(SUPERVISORES[n])) return n; } if(/\bares\b/.test(t)) return 'Sede'; return null; }
+function otSup(o){ for(const f of [o.asesor,o.tecnico,o.supervisor]){ const s=norm(f||''); if(!s) continue; for(const n of SUP_NOMBRES){ if(reSup(n).test(s)) return n; } } return null; }
 function clasificarRep(texto,tipo){
   if(tipo==='PM') return pick('PM 5.000 km');
   const t=String(texto||'');
@@ -391,7 +395,7 @@ function otFiltradas(t){
     const s=otSup(o);
     if(flotaModo==='sup') return s===t.supervisor;
     if(flotaModo==='sup_sin') return s===t.supervisor||s==null;
-    return s!=='Sede';
+    return s!==SUP_MENSUAL;
   }).sort((a,b)=>(a.fecha_iso||'').localeCompare(b.fecha_iso||''));
 }
 function importarOT(){
@@ -425,7 +429,7 @@ function render(){
 function selTurnoHTML(){
   const ts=turnosOrd(); const t=turnoSel();
   if(!ts.length) return '';
-  return `<div class="fg" style="margin-bottom:12px;"><label class="fl">Turno de 14 días</label><select class="fs" onchange="selT=this.value;localStorage.setItem('pv_sel',selT);render()">${ts.map(x=>`<option value="${x.id}" ${t&&t.id===x.id?'selected':''}>${esc(x.supervisor)} · ${fmtD(x.inicio)} al ${fmtD(x.fin)}</option>`).join('')}</select></div>`;
+  return `<div class="fg" style="margin-bottom:12px;"><label class="fl">Turno / período</label><select class="fs" onchange="selT=this.value;localStorage.setItem('pv_sel',selT);render()">${ts.map(x=>`<option value="${x.id}" ${t&&t.id===x.id?'selected':''}>${esc(x.supervisor)} · ${fmtD(x.inicio)} al ${fmtD(x.fin)}</option>`).join('')}</select></div>`;
 }
 function kc(num,lbl,cls,sm){ return `<div class="kpi-card ${cls||''}"><div class="kpi-num ${sm?'sm':''}">${num}</div><div class="kpi-lbl">${lbl}</div></div>`; }
 function kpiBlock(k){
@@ -463,7 +467,7 @@ function vTurno(c){
   if(!t){ c.innerHTML=`<div class="empty"><div class="empty-icon">🗓️</div><div class="empty-txt">No hay turnos</div><div class="empty-sub wr">Tocá + para crear el turno de 14 días de un supervisor</div></div>`; return; }
   const k=kpiTurno(t.id);
   let h=selTurnoHTML();
-  h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>${esc(t.supervisor)}</b><div class="ev-int">${fmtD(t.inicio)} al ${fmtD(t.fin)} · ${DIAS_TURNO} días</div></div><button class="btn-secondary btn-sm wr" onclick="fTurno('${t.id}')">Editar</button></div>${t.obs?`<div class="plan-note">${esc(t.obs)}</div>`:''}</div>`;
+  h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>${esc(t.supervisor)}</b><div class="ev-int">${fmtD(t.inicio)} al ${fmtD(t.fin)} · ${diasPeriodo(t)} días</div></div><button class="btn-secondary btn-sm wr" onclick="fTurno('${t.id}')">Editar</button></div>${t.obs?`<div class="plan-note">${esc(t.obs)}</div>`:''}</div>`;
   h+=kpiBlock(k);
   const tp=Object.keys(k.porTipo).sort();
   if(tp.length){ h+=`<div class="sec-hdr">Trabajos por tipo de reparación</div><div class="tbl-wrap"><table><thead><tr><th>TIPO</th><th>PROG.</th><th>IMPREV.</th><th>TOTAL</th></tr></thead><tbody>${tp.map(n=>`<tr><td style="white-space:normal">${esc(n)}</td><td>${k.porTipo[n].p}</td><td>${k.porTipo[n].i}</td><td><b>${k.porTipo[n].p+k.porTipo[n].i}</b></td></tr>`).join('')}</tbody></table></div>`; }
@@ -493,15 +497,15 @@ function fTurno(id){
   const t=id?S.turnos[id]:null; const ts=turnosOrd();
   const sugerido=ts.length?addDays(ts[0].fin,1):hoyISO();
   openSheet(t?'Editar turno':'Nuevo turno',
-  `<div class="fg"><label class="fl">Supervisor *</label><select class="fs" id="tSup">${SUP_NOMBRES.map(n=>`<option ${t&&t.supervisor===n?'selected':''}>${n}</option>`).join('')}</select></div>
-   <div class="fg"><label class="fl">Fecha de inicio del turno *</label><input class="fi" type="date" id="tIni" value="${t?t.inicio:sugerido}" onchange="$('tFin').textContent=fmtD(addDays(this.value,${DIAS_TURNO-1}))"><div class="ev-int" style="margin-top:4px;">Fin (14 días): <b id="tFin">${fmtD(addDays(t?t.inicio:sugerido,DIAS_TURNO-1))}</b></div></div>
+  `<div class="fg"><label class="fl">Supervisor *</label><select class="fs" id="tSup" onchange="$('tFin').textContent=fmtD(periodoTurno(this.value,$('tIni').value).fin)">${SUP_NOMBRES.map(n=>`<option ${t&&t.supervisor===n?'selected':''}>${n}</option>`).join('')}</select></div>
+   <div class="fg"><label class="fl">Fecha de inicio del turno *</label><input class="fi" type="date" id="tIni" value="${t?t.inicio:sugerido}" onchange="$('tFin').textContent=fmtD(periodoTurno($('tSup').value,this.value).fin)"><div class="ev-int" style="margin-top:4px;">Fin (14 días; mes completo para Diego Ares): <b id="tFin">${fmtD(periodoTurno(t?t.supervisor:SUP_NOMBRES[0],t?t.inicio:sugerido).fin)}</b></div></div>
    <div class="fg"><label class="fl">Observaciones del turno</label><textarea class="fta" id="tObs" placeholder="Novedades, ausencias, contexto…">${esc(t?t.obs||'':'')}</textarea></div>`,
   `${t?`<button class="btn-danger" onclick="delTurno('${t.id}')">Eliminar</button>`:''}<button class="btn-primary" onclick="saveTurno('${t?t.id:''}')">Guardar</button>`);
 }
 function saveTurno(id){
   const ini=$('tIni').value; if(!ini){ toast('Falta la fecha de inicio'); return; }
   const t=id?S.turnos[id]:{id:uid('t')};
-  Object.assign(t,{supervisor:$('tSup').value,inicio:ini,fin:addDays(ini,DIAS_TURNO-1),obs:$('tObs').value.trim()});
+  { const p=periodoTurno($('tSup').value,ini); Object.assign(t,{supervisor:$('tSup').value,inicio:p.inicio,fin:p.fin,obs:$('tObs').value.trim()}); }
   put('turnos',t); selT=t.id; localStorage.setItem('pv_sel',selT); closeSheet(); render(); toast('Turno guardado');
 }
 function delTurno(id){
@@ -672,7 +676,7 @@ function plantilla(){
 /* ═══════════ CARGA DE INFORMES (cambio de turno Excel/Word, indicadores PDF) ═══════════ */
 let rep=null; // vista previa del informe cargado
 function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error('Sin conexión para cargar '+src.split('/').pop())); document.head.appendChild(s); }); }
-function supDeTexto(t){ const n=norm(t); for(const k of SUP_NOMBRES){ if(n.includes(SUPERVISORES[k])) return k; } return ''; }
+function supDeTexto(t){ const n=norm(t); for(const k of SUP_NOMBRES){ if(reSup(k).test(n)) return k; } return ''; }
 function horasTexto(v){ if(typeof v==='number') return v; const m=String(v==null?'':v).replace(',','.').match(/\d+(?:\.\d+)?/); return m?parseFloat(m[0]):null; }
 function patenteDe(v){ const s=String(v||'').trim().toUpperCase(); const m=s.match(/[A-Z]{2}\d{3}[A-Z]{2}|[A-Z]{3}\d{3}/); return m?m[0]:s.replace(/\s+/g,' '); }
 function esRoster(aoa){ return aoa.some(r=>norm(r[0]).startsWith('n ot freddy')); }
@@ -1054,6 +1058,7 @@ function sincronizarOTs(){
   ots.forEach(({o,f,s})=>{
     const wid='wf_'+String(o.id).replace(/[^a-zA-Z0-9_-]/g,'_'); if(descartado(wid)||S.trabajos[wid]) return;
     let T=turnosSup(s).find(x=>enTurno(x,f));
+    if(!T&&s===SUP_MENSUAL){ const p=periodoTurno(s,f); if(descartado('T|'+s+'|'+p.inicio)) return; T={id:'tm_'+slug(s)+'_'+p.inicio.slice(0,7),supervisor:s,inicio:p.inicio,fin:p.fin,obs:'Período mensual del taller sede San Juan',origen:'auto',hsTurno:8}; put('turnos',T); nT++; }
     if(!T){
       const ts=turnosSup(s); if(!ts.length) return;
       const A=ts.reduce((b,x)=>Math.abs(diasDe(x.inicio)-diasDe(f))<Math.abs(diasDe(b.inicio)-diasDe(f))?x:b,ts[0]);
@@ -1147,14 +1152,14 @@ function buildTurnoReport(tid){
   secs.push({h:'5. INSPECCIONES DE CONTROL DE CALIDAD',blocks:[qc.length?{table:{head:['Fecha','Unidad','OT','Resultado','Inspector','Observaciones'],widths:[0.9,1,0.8,1.3,1.4,2.2],rows:qc.map(x=>[fmtDC(x.fecha),x.unidad,x.ot||'',x.resultado||'',x.inspector||'',x.obs||''])}}:{p:'Sin inspecciones de calidad en el turno.'}]});
   secs.push({h:'6. OBSERVACIONES',blocks:[{p:t.obs||'[Completar manualmente]'}]});
   return {file:'Informe_Productividad_'+slug(t.supervisor.split(' ').pop())+'_'+t.inicio,title:'INFORME DE PRODUCTIVIDAD DEL TURNO',subtitle:'Supervisor: '+t.supervisor+' – Turno del '+fmtD(t.inicio)+' al '+fmtD(t.fin),tema:'KPI de productividad del taller de livianos – Proyecto Vicuña',
-    meta:metaBase([['Actividad','Productividad del personal del taller – Proyecto Vicuña'],['Sistema / Alcance','KPI del supervisor durante su turno de 14 días'],['Supervisor',t.supervisor],['Fecha inicio',fmtD(t.inicio)],['Fecha fin',fmtD(t.fin)],['Modalidad','Turno de trabajo de 14 días']]),secs};
+    meta:metaBase([['Actividad','Productividad del personal del taller – Proyecto Vicuña'],['Sistema / Alcance',t.supervisor===SUP_MENSUAL?'KPI del supervisor durante el período mensual':'KPI del supervisor durante su turno de 14 días'],['Supervisor',t.supervisor],['Fecha inicio',fmtD(t.inicio)],['Fecha fin',fmtD(t.fin)],['Modalidad',t.supervisor===SUP_MENSUAL?'Período mensual (taller sede San Juan)':'Turno de trabajo de 14 días']]),secs};
 }
 function buildCompReport(){
   const ts=turnosOrd(); const M=cfg('moneda');
   const rows=ts.map(t=>{ const k=kpiTurno(t.id); return [t.supervisor.split(' ').pop(),fmtDC(t.inicio)+' – '+fmtDC(t.fin),k.total,k.prog,k.imprev,k.backlogs,k.qcTotal,fpct(k.pQC),fm(k.mo),fm(k.rep),fm(k.fact)]; });
   const prom=SUP_NOMBRES.map(n=>{ const ks=ts.filter(t=>t.supervisor===n).map(t=>kpiTurno(t.id)); if(!ks.length) return [n.split(' ').pop(),0,'—','—','—','—','—','—']; const av=f=>ks.reduce((s,x)=>s+f(x),0)/ks.length; return [n.split(' ').pop(),ks.length,fnum(av(x=>x.total)),fnum(av(x=>x.prog)),fnum(av(x=>x.imprev)),fnum(av(x=>x.backlogs)),fnum(av(x=>x.qcTotal)),fm(av(x=>x.fact))]; });
-  return {file:'Comparativo_Supervisores_'+hoyISO(),title:'INFORME COMPARATIVO DE PRODUCTIVIDAD',subtitle:'Supervisores Marcos Manzini y Matias Quiroga',tema:'KPI de productividad del taller de livianos – Proyecto Vicuña',
-    meta:metaBase([['Actividad','Productividad del personal del taller – Proyecto Vicuña'],['Sistema / Alcance','Comparativo de KPI por turno de 14 días'],['Supervisores',SUP_NOMBRES.join(' / ')],['Turnos incluidos',String(ts.length)],['Modalidad','Turnos de trabajo de 14 días']]),
+  return {file:'Comparativo_Supervisores_'+hoyISO(),title:'INFORME COMPARATIVO DE PRODUCTIVIDAD',subtitle:'Supervisores '+SUP_NOMBRES.join(', '),tema:'KPI de productividad del taller de livianos – Proyecto Vicuña',
+    meta:metaBase([['Actividad','Productividad del personal del taller – Proyecto Vicuña'],['Sistema / Alcance','Comparativo de KPI por turno de 14 días (Diego Ares: por mes)'],['Supervisores',SUP_NOMBRES.join(' / ')],['Turnos incluidos',String(ts.length)],['Modalidad','Turnos de trabajo de 14 días']]),
     secs:[{h:'1. KPI POR TURNO',blocks:[rows.length?{table:{head:['Supervisor','Turno','Trab.','Prog.','Imprev.','Backl.','QC','% QC conf.','MO ('+M+')','Rep. ('+M+')','Total'],widths:[1.1,1.4,0.6,0.6,0.7,0.6,0.5,0.9,1.2,1.2,1.2],small:true,rows}}:{p:'Sin turnos cargados.'}]},
       {h:'2. PROMEDIO POR TURNO Y SUPERVISOR',blocks:[{table:{head:['Supervisor','Turnos','Trab.','Prog.','Imprev.','Backl.','Insp. QC','Facturado ('+M+')'],widths:[1.2,0.7,0.8,0.8,0.8,0.8,0.9,1.4],rows:prom}}]},
       {h:'3. OBSERVACIONES',blocks:[{p:'[Completar manualmente]'}]}]};
