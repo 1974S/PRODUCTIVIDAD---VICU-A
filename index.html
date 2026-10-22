@@ -276,7 +276,7 @@ function put(col,obj){
 }
 function del(col,id){
   if(soloLectura()) return;
-  if(/^(wa|qa|ba)_/.test(id)) descartar(id);
+  if(/^(wa|wf|qa|ba)_/.test(id)) descartar(id);
   delete S[col][id]; persist();
   if(db&&fbOK) db.ref('productividad/'+col+'/'+id).remove().catch(()=>{});
 }
@@ -1026,9 +1026,10 @@ function sincronizarAuto(manual){
     const cand=Object.values(S.trabajos).filter(t=>!t.otKey&&!t.hojaKey&&!t.ot&&/auto|roster/.test(t.origen||''));
     emparejar(cand,otsFlotaNorm()).forEach(([t,o])=>{ aplicarPar(t,o); nE++; });
   }
+  const ro=flotaOT.length?sincronizarOTs():{nT:0,nW:0}; nT+=ro.nT; nW+=ro.nW;
   // QC y backlogs deducidos
   Object.values(S.trabajos).forEach(t=>{
-    if(!/auto|roster/.test(t.origen||'')) return;
+    if(!/auto|roster|flota/.test(t.origen||'')) return;
     const txt=(t.descripcion||'')+' '+(t.causa||'')+' '+(t.otTxt||'');
     const qid='qa_'+t.id, bid='ba_'+t.id;
     const esQC=RE_QC.test(txt), esBK=!esQC&&t.condicion==='imprevisto'&&RE_BKL.test((t.causa||'')+' '+(t.descripcion||''));
@@ -1042,9 +1043,38 @@ function sincronizarAuto(manual){
   if(manual) toast('Sincronizado: '+nT+' turno(s), '+nW+' trabajo(s), '+nE+' con OT de Flota'+(nQ?', '+nQ+' control(es) de calidad':'')+(nB?', '+nB+' backlog(s) estimados':''));
   if(nT||nW||nE||nQ||nB) softRender();
 }
+
+// OT de Flota (historial completo, también períodos viejos sin roster): se asignan al supervisor y a su turno de 14 días
+function sincronizarOTs(){
+  let nT=0,nW=0;
+  const usados=new Set(Object.values(S.trabajos).map(x=>x.otKey).filter(Boolean));
+  const turnosSup=n=>Object.values(S.turnos).filter(x=>x.supervisor===n).sort((a,b)=>a.inicio.localeCompare(b.inicio));
+  const ots=flotaOT.filter(o=>o.tipo!=='Venta'&&!usados.has(o.id)).map(o=>({o,f:o.fecha_iso||toISO(o.fecha),s:otSup(o)})).filter(x=>x.f&&SUP_NOMBRES.includes(x.s)).sort((a,b)=>a.f.localeCompare(b.f));
+  const oc=ocultarCostos();
+  ots.forEach(({o,f,s})=>{
+    const wid='wf_'+String(o.id).replace(/[^a-zA-Z0-9_-]/g,'_'); if(descartado(wid)||S.trabajos[wid]) return;
+    let T=turnosSup(s).find(x=>enTurno(x,f));
+    if(!T){
+      const ts=turnosSup(s); if(!ts.length) return;
+      const A=ts.reduce((b,x)=>Math.abs(diasDe(x.inicio)-diasDe(f))<Math.abs(diasDe(b.inicio)-diasDe(f))?x:b,ts[0]);
+      const k=Math.floor((diasDe(f)-diasDe(A.inicio))/DIAS_TURNO);
+      let ini=addDays(A.inicio,k*DIAS_TURNO), fin=addDays(ini,DIAS_TURNO-1);
+      ts.forEach(x=>{ if(x.fin>=ini&&x.inicio<=fin){ if(x.inicio<=ini) ini=addDays(x.fin,1); else fin=addDays(x.inicio,-1); } });
+      if(ini>fin||f<ini||f>fin||descartado('T|'+s+'|'+ini)) return;
+      T=Object.values(S.turnos).find(x=>x.supervisor===s&&x.inicio===ini);
+      if(!T){ T={id:'te_'+slug(s)+'_'+ini,supervisor:s,inicio:ini,fin,obs:'Turno estimado: no hay roster cargado en Flota para este período',origen:'estimado',hsTurno:A.hsTurno||12}; put('turnos',T); nT++; }
+    }
+    const m=otMontos(o), desc=(o.trabajos||[]).map(x=>x.desc).filter(Boolean).join('; ').slice(0,300), txt=desc+' '+(o.repuestos||[]).map(r=>r.desc).join(' ');
+    put('trabajos',{id:wid,turnoId:T.id,fecha:f,unidad:String(o.patente||'').toUpperCase(),ot:String(o.nro||''),condicion:o.tipo==='PM'?'programado':'imprevisto',reparacion:clasificarRep(txt,o.tipo),descripcion:desc,otTxt:desc.slice(0,400),
+      repuestos:(o.repuestos||[]).map(r=>({codigo:r.codigo||'',desc:r.desc||'',cant:num(r.cant)||1,precio:null})),moFact:oc?null:m.mo,repFact:oc?null:m.rep,origen:'flota',otKey:o.id,creado:Date.now()}); nW++;
+  });
+  // importes al día (cambio de moneda o corrección de la OT en Flota)
+  if(!oc){ const mp=new Map(flotaOT.map(o=>[o.id,o])); Object.values(S.trabajos).forEach(x=>{ const o=x.otKey&&mp.get(x.otKey); if(o&&!x.hojaKey){ const m=otMontos(o); putSi('trabajos',{id:x.id,moFact:m.mo,repFact:m.rep}); } }); }
+  return {nT,nW};
+}
 function vSync(){
   const i=syncInfo; const st=!autoOK.rep||!autoOK.meta?'Esperando datos de Flota…':(i&&i.ro?'Modo lectura: ves lo que sincroniza el administrador':'Sincronizado');
-  let h=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>Datos automáticos desde Flota Vicuña</b><div class="ev-int">${esc(st)}</div><div class="ev-int">${Object.keys(rostersMeta||{}).length} roster(s) · ${Object.keys(reparReales||{}).length} reparaciones · ${flotaOT.length} OT leídas</div></div>${soloLectura()?'':'<button class="btn-primary btn-sm wr" onclick="sincronizarAuto(true)">Sincronizar</button>'}</div><div class="plan-note">Los turnos, trabajos, horas hombre, repuestos y facturación se arman solos con los rosters y las OT que ya cargan en Flota. No hace falta subir archivos.</div></div>`;
+  let h=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>Datos automáticos desde Flota Vicuña</b><div class="ev-int">${esc(st)}</div><div class="ev-int">${Object.keys(rostersMeta||{}).length} roster(s) · ${Object.keys(reparReales||{}).length} reparaciones · ${flotaOT.length} OT leídas</div></div>${soloLectura()?'':'<button class="btn-primary btn-sm wr" onclick="sincronizarAuto(true)">Sincronizar</button>'}</div><div class="plan-note">Los turnos, trabajos, horas hombre, repuestos y facturación se arman solos con los rosters y todas las OT (también las antiguas) que ya están en Flota. Los períodos sin roster usan turnos estimados de 14 días. No hace falta subir archivos.</div></div>`;
   return h;
 }
 
