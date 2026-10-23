@@ -770,7 +770,10 @@ async function cargarUno(file){
       if(!window.XLSX) throw new Error('Librería Excel no disponible (sin conexión)');
       const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array',cellDates:true});
       const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
-      if(!esRoster(aoa)){ rep={kind:'aviso',name:file.name,msg:'Este Excel no es un "Cambio de turno fin de roster". Si es una planilla propia de trabajos, backlogs o inspecciones, usá la carga genérica de más abajo.'}; render(); return; }
+      if(!esRoster(aoa)){
+        const p=parseMensualExcel(wb);
+        if(p.bk.length||p.pr.length){ rep=Object.assign({kind:'mensual',name:file.name},p); render(); return; }
+        rep={kind:'aviso',name:file.name,msg:'Este Excel no es un "Cambio de turno fin de roster". Si es una planilla propia de trabajos, backlogs o inspecciones, usá la carga genérica de más abajo.'}; render(); return; }
       rosterPreview(file.name,aoa);
     }else if(ext==='docx'){
       if(!window.mammoth) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js');
@@ -783,7 +786,8 @@ async function cargarUno(file){
       if(!window.pdfjsLib){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
       const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
       const pages=[]; for(let p=1;p<=pdf.numPages;p++){ const tc=await (await pdf.getPage(p)).getTextContent(); pages.push(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]}))); }
-      if(esHoja(pages)){ const ots=parseHojas(pages);
+      if(esMensual(pages)&&!esHoja(pages)){ const p=parseMensual(pages); rep=(p.bk.length||p.pr.length)?Object.assign({kind:'mensual',name:file.name},p):{kind:'aviso',name:file.name,msg:'Se reconoció el PDF mensual pero no se encontraron filas. Cada fila debe empezar con la fecha (dd/mm/aaaa) y llevar supervisor y patente.'}; }
+      else if(esHoja(pages)){ const ots=parseHojas(pages);
         if(!ots.length) rep={kind:'aviso',name:file.name,msg:'Se reconoció una hoja de trabajos y costos, pero no se pudo leer ninguna orden.'};
         else if(rep&&rep.kind==='hojas'){ const k=new Set(rep.ots.map(o=>o.key)); ots.forEach(o=>{ if(!k.has(o.key)) rep.ots.push(o); }); rep.names.push(file.name); }
         else rep={kind:'hojas',names:[file.name],ots,crear:false}; }
@@ -826,6 +830,7 @@ function vInforme(){
     return h;
   }
   if(rep.kind==='hojas') return vHojas();
+  if(rep.kind==='mensual') return vMensual();
   if(rep.kind==='pdf'){
     const R=rep; const pairs=emparejar(pdfCandidatos(),R.ots);
     let h=`<div class="alert alert-info"><b>Informe de indicadores · ${esc(R.name)}</b><br>${esc(R.mes||'')} · ${R.ots.length} OT en el detalle · ${R.hh.length} registro(s) de horas hombre por roster</div>`;
@@ -1042,8 +1047,9 @@ function sincronizarAuto(manual){
     const esQC=RE_QC.test(txt), esBK=!esQC&&t.condicion==='imprevisto'&&RE_BKL.test((t.causa||'')+' '+(t.descripcion||''));
     if(esQC&&!S.qc[qid]&&!descartado(qid)){ put('qc',{id:qid,turnoId:t.turnoId,fecha:t.fecha,unidad:t.unidad,ot:t.ot||'',resultado:'Realizada',inspector:'',obs:'Deducida de la OT (control e inspección)',origen:'auto',creado:Date.now()}); nQ++; }
     if(!esQC&&S.qc[qid]&&S.qc[qid].origen==='auto'&&S.qc[qid].resultado==='Realizada') del('qc',qid);
-    if(esBK&&!S.backlogs[bid]&&!descartado(bid)){ put('backlogs',{id:bid,turnoId:t.turnoId,fecha:t.fecha,unidad:t.unidad,ot:t.ot||'',descripcion:(t.descripcion||'').slice(0,300),obs:'Estimado: el texto indica un trabajo pendiente o detectado antes',origen:'auto',creado:Date.now()}); nB++; }
-    if(!esBK&&S.backlogs[bid]&&S.backlogs[bid].origen==='auto') del('backlogs',bid);
+    const bkManual=Object.values(S.backlogs).some(b=>b.turnoId===t.turnoId&&b.origen==='pdf');
+    if(esBK&&!bkManual&&!S.backlogs[bid]&&!descartado(bid)){ put('backlogs',{id:bid,turnoId:t.turnoId,fecha:t.fecha,unidad:t.unidad,ot:t.ot||'',descripcion:(t.descripcion||'').slice(0,300),obs:'Estimado: el texto indica un trabajo pendiente o detectado antes',origen:'auto',creado:Date.now()}); nB++; }
+    if((!esBK||bkManual)&&S.backlogs[bid]&&S.backlogs[bid].origen==='auto') del('backlogs',bid);
   });
   syncInfo={t:nT,w:nW,e:nE,q:nQ,b:nB,roster:metas.length,reps:Object.keys(reparReales||{}).length,ot:flotaOT.length,hora:new Date()};
   if(!selT&&Object.keys(S.turnos).length){ const u=turnosOrd()[0]; if(u) selT=u.id; }
@@ -1133,6 +1139,102 @@ function vCalendario(c){
     h+=`</div>`;
   }else h+=`<div class="note">Tocá un día para ver los trabajos, backlogs e inspecciones de esa fecha.</div>`;
   c.innerHTML=h;
+}
+
+/* ═══════════ PDF MENSUAL: backlogs realizados + pedidos de repuestos ═══════════ */
+function esMensual(pages){ const t=pages.map(p=>p.map(i=>i.s).join(' ')).join(' '); return /BACKLOGS REALIZADOS/i.test(t)||/PEDIDOS DE REPUESTOS/i.test(t); }
+function parseMensual(pages){
+  const lines=[]; pages.forEach(p=>pdfLineas(p).forEach(l=>lines.push(l)));
+  const bk=[], pr=[]; let sec='', cur=null, mes='';
+  lines.forEach(l=>{
+    let m;
+    if(!mes&&(m=l.match(/Per[ií]odo\s*:?\s*(.+)$/i))) mes=m[1].trim();
+    if(/BACKLOGS REALIZADOS/i.test(l)&&!/^\d/.test(l)){ sec='bk'; cur=null; return; }
+    if(/PEDIDOS DE REPUESTOS/i.test(l)&&!/^\d/.test(l)){ sec='pr'; cur=null; return; }
+    if(/^(OBSERVACIONES|Freddy El Taller|Fecha Supervisor)/i.test(l)){ if(/^OBSERV/i.test(l)){ sec=''; cur=null; } return; }
+    if(!sec) return;
+    m=l.match(/^(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\s+(.+?)\s+([A-Z]{2}\d{3}[A-Z]{2})\b\s*(.*)$/);
+    if(m){
+      const fecha=toISO(m[1]), sup=supDeTexto(m[2]); let rest=m[4].trim(), ot='';
+      const mo=rest.match(/^(\d{1,7})\s+(.*)$/); if(mo){ ot=mo[1]; rest=mo[2]; } else if(/^\d{1,7}$/.test(rest)){ ot=rest; rest=''; }
+      cur={fecha,sup,supTxt:m[2],patente:m[3],ot,txt:rest};
+      (sec==='bk'?bk:pr).push(cur); return; }
+    if(cur&&!/^(Fecha|Supervisor)\b/i.test(l)&&!/^P[aá]gina/i.test(l)) cur.txt=(cur.txt+' '+l).trim();
+  });
+  pr.forEach(r=>{ const m=r.txt.match(/^(.*?)\s+(\d+(?:[.,]\d+)?)\s*(?:u|un|unid\.?|uni\.?)?$/i); if(m&&m[1]){ r.desc=m[1].trim(); r.cant=num(m[2])||1; } else { r.desc=r.txt; r.cant=1; } });
+  return {mes,bk:bk.filter(x=>x.fecha),pr:pr.filter(x=>x.fecha)};
+}
+// turno (de 14 días o mensual) que corresponde a un supervisor en una fecha; crea el estimado si hace falta
+function turnoPara(s,f){
+  if(!s||!f) return null;
+  const ts=Object.values(S.turnos).filter(x=>x.supervisor===s).sort((a,b)=>a.inicio.localeCompare(b.inicio));
+  let T=ts.find(x=>enTurno(x,f)); if(T) return T;
+  if(s===SUP_MENSUAL){ const p=periodoTurno(s,f); T={id:'tm_'+slug(s)+'_'+p.inicio.slice(0,7),supervisor:s,inicio:p.inicio,fin:p.fin,obs:'Período mensual del taller sede San Juan',origen:'auto',hsTurno:8}; put('turnos',T); return T; }
+  if(!ts.length) return null;
+  const A=ts.reduce((b,x)=>Math.abs(diasDe(x.inicio)-diasDe(f))<Math.abs(diasDe(b.inicio)-diasDe(f))?x:b,ts[0]);
+  const k=Math.floor((diasDe(f)-diasDe(A.inicio))/DIAS_TURNO); let ini=addDays(A.inicio,k*DIAS_TURNO), fin=addDays(ini,DIAS_TURNO-1);
+  ts.forEach(x=>{ if(x.fin>=ini&&x.inicio<=fin){ if(x.inicio<=ini) ini=addDays(x.fin,1); else fin=addDays(x.inicio,-1); } });
+  if(ini>fin||f<ini||f>fin) return null;
+  T={id:'te_'+slug(s)+'_'+ini,supervisor:s,inicio:ini,fin,obs:'Turno estimado: no hay roster cargado en Flota para este período',origen:'estimado',hsTurno:A.hsTurno||12}; put('turnos',T); return T;
+}
+const kBk=r=>'bm|'+slug(r.sup)+'|'+r.fecha+'|'+r.patente+'|'+slug(r.txt).slice(0,40);
+function trabajoDe(r){ // trabajo cargado al que pertenece un pedido de repuestos
+  const T=turnoPara(r.sup,r.fecha); if(!T) return null;
+  const trs=Object.values(S.trabajos).filter(x=>x.turnoId===T.id&&x.unidad===r.patente);
+  if(!trs.length) return null;
+  const porOt=r.ot&&trs.find(x=>String(x.ot)===String(r.ot)); if(porOt) return porOt;
+  return trs.slice().sort((a,b)=>Math.abs(diasDe(a.fecha)-diasDe(r.fecha))-Math.abs(diasDe(b.fecha)-diasDe(r.fecha)))[0];
+}
+function vMensual(){
+  const R=rep; const sinSup=[...R.bk,...R.pr].filter(x=>!x.sup).length;
+  const ya=new Set(Object.values(S.backlogs).map(x=>x.rosterKey).filter(Boolean));
+  const bkNuevos=R.bk.filter(x=>x.sup&&!ya.has(kBk(x))).length;
+  const prCon=R.pr.filter(x=>x.sup&&trabajoDe(x)).length, prSin=R.pr.length-prCon;
+  let h=`<div class="alert alert-info"><b>PDF mensual · ${esc(R.name)}</b><br>${esc(R.mes||'')} · ${R.bk.length} backlog(s) realizados · ${R.pr.length} pedido(s) de repuestos</div>`;
+  h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys">Backlogs nuevos a cargar: <b>${bkNuevos}</b> (${R.bk.length-bkNuevos} ya estaban)<div class="ev-int">Pedidos de repuestos que se suman a un trabajo ya cargado: <b>${prCon}</b>${prSin?` · sin trabajo asociado: ${prSin}`:''}</div>${sinSup?`<div class="ev-int" style="color:var(--red);">${sinSup} fila(s) con supervisor no reconocido: se omiten (usar Manzini, Quiroga o Ares).</div>`:''}</div></div></div>`;
+  h+=`<div class="ev-list">${R.bk.slice(0,25).map(x=>`<div class="ev-card"><div class="ev-stripe sc-pm3"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(x.patente)}${x.ot?` <span class="ev-int">OT ${esc(x.ot)}</span>`:''}</div><div class="ev-date">${fmtDC(x.fecha)}</div></div><div class="ev-row2"><span class="badge pm3">Backlog</span><span class="ev-area">${esc(x.sup||x.supTxt)}</span></div><div class="ev-obs">${esc(x.txt)}</div></div></div>`).join('')}</div>`;
+  h+=`<div class="btn-row wr" style="margin-top:10px;"><button class="btn-secondary" onclick="rep=null;render()">Cancelar</button><button class="btn-primary" onclick="aplicarMensual()">Aplicar al sistema</button></div><div class="note">Los backlogs cargados a mano reemplazan a los estimados automáticamente en ese turno.</div>`;
+  return h;
+}
+function aplicarMensual(){
+  const R=rep; if(!R||R.kind!=='mensual') return; let nb=0, np=0, ns=0;
+  const ya=new Set(Object.values(S.backlogs).map(x=>x.rosterKey).filter(Boolean));
+  R.bk.forEach(x=>{ if(!x.sup) return; const k=kBk(x); if(ya.has(k)) return; const T=turnoPara(x.sup,x.fecha); if(!T) return;
+    put('backlogs',{id:uid('b'),turnoId:T.id,fecha:x.fecha,unidad:x.patente,ot:x.ot||'',descripcion:x.txt.slice(0,400),origen:'pdf',rosterKey:k,creado:Date.now()}); nb++; });
+  R.pr.forEach(x=>{ if(!x.sup) return; const t=trabajoDe(x); if(!t){ ns++; return; }
+    const rs=(t.repuestos||[]).slice(); if(rs.some(r=>norm(r.desc)===norm(x.desc)&&num(r.cant)===x.cant)) return;
+    rs.push({codigo:'',desc:x.desc,cant:x.cant,precio:null}); t.repuestos=rs; if(!t.ot&&x.ot) t.ot=x.ot; put('trabajos',t); np++; });
+  // si el turno tiene backlogs cargados a mano, se descartan los estimados
+  Object.values(S.backlogs).filter(b=>b.origen==='auto').forEach(b=>{ if(Object.values(S.backlogs).some(o=>o.turnoId===b.turnoId&&o.origen==='pdf')) del('backlogs',b.id); });
+  rep=null; toast(nb+' backlog(s) y '+np+' pedido(s) de repuestos cargados'+(ns?' · '+ns+' pedido(s) sin trabajo asociado':'')); render();
+}
+
+/* ── Excel mensual: hoja de backlogs (y opcionalmente hoja de pedidos de repuestos) ── */
+function supDeUnidad(u,f,ot){
+  const c=Object.values(S.trabajos).filter(x=>x.unidad===u&&S.turnos[x.turnoId]);
+  if(!c.length) return '';
+  const p=ot&&c.find(x=>String(x.ot)===String(ot)); const t=p||c.slice().sort((a,b)=>Math.abs(diasDe(a.fecha)-diasDe(f))-Math.abs(diasDe(b.fecha)-diasDe(f)))[0];
+  return S.turnos[t.turnoId].supervisor;
+}
+function parseMensualExcel(wb){
+  const bk=[], pr=[];
+  wb.SheetNames.forEach(sn=>{
+    const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:''});
+    const hi=aoa.findIndex(r=>{ const h=r.map(norm); return h.some(x=>x.includes('fecha'))&&h.some(x=>/unidad|patente|dominio|interno/.test(x)); });
+    if(hi<0) return;
+    const h=aoa[hi].map(norm), col=(re,ex)=>h.findIndex(x=>re.test(x)&&!(ex&&ex.test(x)));
+    const cF=col(/fecha/), cS=col(/supervisor|responsable|tecnico/), cU=col(/unidad|patente|dominio|interno/), cO=col(/^(n ?ot|nro ot|ot|orden)/),
+      cR=col(/repuesto|material|insumo/), cC=col(/cant/), cD=col(/backlog|descripcion|detalle|trabajo/);
+    const esPr=cR>=0&&(/repuest|pedido/.test(norm(sn))||cD<0);
+    aoa.slice(hi+1).forEach(r=>{
+      const fecha=toISO(r[cF]), patente=patenteDe(r[cU]); if(!fecha||!patente) return;
+      const ot=cO>=0?String(r[cO]||'').trim():''; let supTxt=cS>=0?String(r[cS]||'').trim():''; let sup=supDeTexto(supTxt);
+      if(!sup) sup=supDeUnidad(patente,fecha,ot);
+      if(esPr){ const d=String(r[cR]||'').trim(); if(!d) return; pr.push({fecha,sup,supTxt,patente,ot,desc:d,cant:cC>=0?(num(r[cC])||1):1,txt:d}); }
+      else{ const d=String(r[cD>=0?cD:cR]||'').trim(); if(!d) return; bk.push({fecha,sup,supTxt,patente,ot,txt:d}); }
+    });
+  });
+  return {mes:'',bk,pr};
 }
 
 /* ═══════════ INFORMES (formato Freddy) ═══════════ */
