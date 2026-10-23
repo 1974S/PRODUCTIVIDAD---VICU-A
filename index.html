@@ -596,10 +596,13 @@ function vFlota(c){
       h+=`<div class="btn-row wr" style="margin-top:10px;"><button class="btn-secondary" onclick="selTodasOT()">Seleccionar todas</button><button class="btn-primary" onclick="importarOT()">Importar seleccionadas</button></div><div class="note">Importa a "Trabajos": PM = programado; el resto, imprevisto. Revisá el tipo de reparación después, se clasifica por palabras clave.</div>`;
     }
   }
-  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr"><div class="plan-card"><div class="plan-row"><div class="plan-sys">Cambio de turno fin de roster (Excel o Word), órdenes de trabajo valorizadas (PDF) e Informe de indicadores de Flota (PDF). Se detecta el tipo automáticamente y podés elegir varios PDF a la vez.</div></div></div><div class="fg"><label class="fl">Archivo (.xlsx, .docx, .pdf)</label><input class="fi" type="file" accept=".xlsx,.xls,.csv,.docx,.pdf" multiple onchange="cargarInforme(this.files);this.value=''"></div>`+vInforme()+`</div>`;
+  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('📥','Importar órdenes de trabajo valorizadas (PDF)','.pdf',1)+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+`</div>`;
   h+=`<div class="sec-hdr">Carga manual desde Excel / CSV</div><div class="wr">`+vImport()+`</div>`;
   c.innerHTML=h;
 }
+const BTNC='width:100%;padding:10px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-weight:600;font-size:13px;margin-bottom:8px;cursor:pointer;';
+let _bc=0;
+function btnCarga(ic,txt,acc,multi){ const id='bc'+(++_bc); return `<input type="file" id="${id}" accept="${acc}" ${multi?'multiple':''} style="display:none" onchange="cargarInforme(this.files);this.value=''"><button style="${BTNC}" onclick="document.getElementById('${id}').click()">${ic} ${txt}</button>`; }
 function toggleOT(id){ flotaSel[id]=!flotaSel[id]; render(); }
 function selTodasOT(){ const t=turnoSel(); const ya=new Set(Object.values(S.trabajos).filter(x=>x.otKey).map(x=>x.otKey)); otFiltradas(t).forEach(o=>{ if(!ya.has(o.id)) flotaSel[o.id]=true; }); render(); }
 
@@ -611,14 +614,14 @@ const IMPDEF={
 function vImport(){
   let h=`<div class="plan-card"><div class="plan-row"><div class="plan-sys">Planilla propia con trabajos, backlogs o inspecciones del turno seleccionado.</div></div></div>`;
   h+=`<div class="fg"><label class="fl">Qué vas a importar</label><select class="fs" id="impEnt" onchange="if(imp){imp.ent=this.value;autoMap();render();}"><option value="trabajos" ${imp&&imp.ent==='trabajos'?'selected':''}>Trabajos (con repuestos y facturación)</option><option value="backlogs" ${imp&&imp.ent==='backlogs'?'selected':''}>Backlogs realizados</option><option value="qc" ${imp&&imp.ent==='qc'?'selected':''}>Inspecciones de calidad</option></select></div>`;
-  h+=`<div class="fg"><label class="fl">Archivo (.xlsx, .xls, .csv)</label><input class="fi" type="file" accept=".xlsx,.xls,.csv" onchange="leerExcel(this.files[0])"></div>`;
+  h+=`<div class="fg"><label class="fl">Archivo (.xlsx, .xls, .csv)</label><input type="file" id="impFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="leerExcel(this.files[0]);this.value=''"><button style="${BTNC}" onclick="document.getElementById('impFile').click()">📋 Elegir planilla propia (Excel / CSV)</button></div>`;
   if(imp&&imp.rows){
     const def=IMPDEF[imp.ent];
     h+=`<div class="alert alert-info"><b>${esc(imp.name)}</b> · ${imp.rows.length} fila(s). Verificá a qué columna corresponde cada dato:</div>`;
     def.f.forEach(([k,l])=>{ h+=`<div class="fg" style="margin-bottom:8px;"><label class="fl">${esc(l)}</label><select class="fs" onchange="imp.map['${k}']=+this.value"><option value="-1">— no importar —</option>${imp.head.map((x,i)=>`<option value="${i}" ${imp.map[k]===i?'selected':''}>${esc(x||('Columna '+(i+1)))}</option>`).join('')}</select></div>`; });
     h+=`<button class="btn-primary" style="width:100%;margin-top:6px;" onclick="importarFilas()">Importar ${imp.rows.length} fila(s)</button>`;
   }
-  h+=`<div class="btn-row" style="margin-top:12px;"><button class="btn-secondary btn-sm" onclick="plantilla()">⬇ Descargar plantilla Excel</button></div>`;
+  h+=`<button style="${BTNC}margin-top:8px;" onclick="plantilla()">⬇️ Descargar plantilla Excel</button>`;
   return h;
 }
 function leerExcel(file){
@@ -1320,6 +1323,7 @@ async function exportDocx(rep){
     kids.push(par(run(s.h,{b:true,s:22}),{before:280,after:100}));
     s.blocks.forEach(b=>{
       if(b.p) kids.push(par(run(b.p),{after:80}));
+      else if(b.img){ const wpx=b.w||560; kids.push(new D.Paragraph({alignment:D.AlignmentType.CENTER,spacing:{before:60,after:120},children:[new D.ImageRun({data:dataURLbytes(b.img),transformation:{width:wpx,height:Math.round(wpx*b.r)},type:'png'})]})); if(b.cap) kids.push(par(run(b.cap),{after:120})); }
       else if(b.table){ const T=b.table, tot=T.widths.reduce((a,c)=>a+c,0), cw=T.widths.map(x=>Math.round(x/tot*W)); cw[cw.length-1]+=W-cw.reduce((a,c)=>a+c,0); const sz=T.small?16:18;
         kids.push(new D.Table({width:{size:W,type:D.WidthType.DXA},columnWidths:cw,rows:[new D.TableRow({tableHeader:true,children:T.head.map((h,i)=>cell([par(run(h,{b:true,s:sz}))],cw[i],{fill:'D9D9D9'}))}),...T.rows.map(r=>new D.TableRow({children:r.map((v,i)=>cell([par(run(v,{s:sz}),{after:0})],cw[i]))}))]})); kids.push(par(run(''),{after:60})); }
     });
