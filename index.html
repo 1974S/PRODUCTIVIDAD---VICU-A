@@ -456,8 +456,10 @@ function vInicio(c){
       h+=`<div class="note">Promedio por turno (${ks.length}): ${fnum(av(x=>x.total))} trabajos · ${fnum(av(x=>x.backlogs))} backlogs · ${fnum(av(x=>x.qcTotal))} insp. QC`+(ocultarCostos()?'':` · ${fm(av(x=>x.fact))} facturado`)+`</div>`;
     }
   });
-  h+=`<div class="sec-hdr">Historial de turnos</div><div class="tbl-wrap"><table style="min-width:520px"><thead><tr><th>TURNO</th><th>TRAB.</th><th>PROG.</th><th>IMPREV.</th><th>BACKL.</th><th>QC</th>${ocultarCostos()?'':'<th>FACTURADO</th>'}</tr></thead><tbody>`;
-  ts.forEach(t=>{ const k=kpiTurno(t.id); h+=`<tr class="clk" onclick="selT='${t.id}';localStorage.setItem('pv_sel',selT);setTab('turno',document.querySelector('[data-tab=turno]'))"><td><b>${esc(t.supervisor.split(' ').pop())}</b> ${fmtDC(t.inicio)}–${fmtDC(t.fin)}</td><td>${k.total}</td><td>${k.prog}</td><td>${k.imprev}</td><td>${k.backlogs}</td><td>${k.qcTotal}</td>${ocultarCostos()?'':`<td>${fm(k.fact)}</td>`}</tr>`; });
+  const ordH=localStorage.getItem('pv_ordh')||'sup';
+  const tsH=ts.slice().sort((a,b)=>ordH==='fecha'?(b.inicio.localeCompare(a.inicio)||a.supervisor.localeCompare(b.supervisor)):(a.supervisor.localeCompare(b.supervisor)||b.inicio.localeCompare(a.inicio)));
+  h+=`<div class="sec-hdr">Historial de turnos</div><div class="fg" style="padding:0 16px;"><select class="fs" onchange="localStorage.setItem('pv_ordh',this.value);render()"><option value="sup" ${ordH==='sup'?'selected':''}>Ordenar: supervisor y fecha</option><option value="fecha" ${ordH==='fecha'?'selected':''}>Ordenar: fecha (más reciente primero)</option></select></div><div class="tbl-wrap"><table style="min-width:520px"><thead><tr><th>TURNO</th><th>TRAB.</th><th>PROG.</th><th>IMPREV.</th><th>BACKL.</th><th>QC</th>${ocultarCostos()?'':'<th>FACTURADO</th>'}</tr></thead><tbody>`;
+  tsH.forEach(t=>{ const k=kpiTurno(t.id); h+=`<tr class="clk" onclick="selT='${t.id}';localStorage.setItem('pv_sel',selT);setTab('turno',document.querySelector('[data-tab=turno]'))"><td><b>${esc(t.supervisor.split(' ').pop())}</b> ${fmtDC(t.inicio)}–${fmtDC(t.fin)}${ordH==='fecha'?'':' · '+t.inicio.slice(0,4)}</td><td>${k.total}</td><td>${k.prog}</td><td>${k.imprev}</td><td>${k.backlogs}</td><td>${k.qcTotal}</td>${ocultarCostos()?'':`<td>${fm(k.fact)}</td>`}</tr>`; });
   h+=`</tbody></table></div><div class="note">Tocá un turno para ver su detalle.</div>`;
   c.innerHTML=h;
 }
