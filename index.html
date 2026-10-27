@@ -446,14 +446,14 @@ function pareto(mios,nom){
   let it=Object.keys(ag).map(k=>[k,ag[k]]).sort((a,b)=>b[1]-a[1]); const tot=it.reduce((s,x)=>s+x[1],0);
   if(!tot) return '';
   if(it.length>9){ const r=it.slice(8).reduce((s,x)=>s+x[1],0); it=it.slice(0,8); it.push(['Otros',r]); }
-  const W=360,H=270,L=34,R=30,T=14,B=96, pw=W-L-R, ph=H-T-B, bw=pw/it.length, mx=it[0][1]; let ac=0;
+  const W=360,H=215,L=34,R=30,T=12,B=80, pw=W-L-R, ph=H-T-B, bw=pw/it.length, mx=it[0][1]; let ac=0;
   const yv=v=>T+ph-v/mx*ph, yp=p=>T+ph-p/100*ph;
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;font-family:inherit;" role="img" aria-label="Pareto de trabajos por tipo de reparación de ${esc(nom)}">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:400px;height:auto;display:block;margin:0 auto;font-family:inherit;" role="img" aria-label="Pareto de trabajos por tipo de reparación de ${esc(nom)}">`;
   [0,50,80,100].forEach(p=>{ s+=`<line x1="${L}" x2="${W-R}" y1="${yp(p)}" y2="${yp(p)}" stroke="currentColor" stroke-opacity="${p===80?.5:.15}" ${p===80?'stroke-dasharray="4 3"':''}/><text x="${W-R+3}" y="${yp(p)+3}" font-size="8" fill="currentColor" fill-opacity=".7">${p}%</text>`; });
   s+=`<text x="${L-4}" y="${T+4}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${mx}</text><text x="${L-4}" y="${T+ph+3}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">0</text>`;
   const pts=[]; it.forEach(([k,v],i)=>{ const x=L+i*bw, y=yv(v); ac+=v; const cx=x+bw/2, cy=yp(ac/tot*100); pts.push([cx,cy]);
     s+=`<rect x="${x+3}" y="${y}" width="${bw-6}" height="${T+ph-y}" rx="2" fill="${ac-v<tot*.8?'#2b8ccf':'#9aa5b1'}"/><text x="${cx}" y="${y-3}" font-size="9" font-weight="700" text-anchor="middle" fill="currentColor">${v}</text>`;
-    const lb=k.replace(/^\d+\s*[-–]\s*/,''); s+=`<text transform="translate(${cx+3},${T+ph+8}) rotate(50)" font-size="8.5" fill="currentColor">${esc(lb.length>20?lb.slice(0,19)+'…':lb)}</text>`; });
+    const lb=k.replace(/^\d+\s*[-–]\s*/,''); s+=`<text transform="translate(${cx+3},${T+ph+8}) rotate(-45)" text-anchor="end" font-size="8.5" fill="currentColor">${esc(lb.length>20?lb.slice(0,19)+'…':lb)}</text>`; });
   s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="#f08a00" stroke-width="2"/>`+pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.6" fill="#f08a00"/>`).join('');
   s+=`</svg>`;
   const n80=(()=>{ let a=0,i=0; for(;i<it.length;i++){ a+=it[i][1]; if(a>=tot*.8) break; } return i+1; })();
@@ -481,12 +481,12 @@ function proyeccion(mios,nom){
   const pT=meses.map((_,k)=>cub[k]?null:fT(k)), pF=meses.map((_,k)=>cub[k]?null:fF(k));
   const totAnual=Math.round(tot.reduce((s,v,k)=>s+(cub[k]?v:0),0)+pT.reduce((s,v)=>s+(v||0),0));
   const facAnual=fac.reduce((s,v,k)=>s+(cub[k]?v:0),0)+pF.reduce((s,v)=>s+(v||0),0);
-  const W=360,H=190,L=30,R=8,T=16,B=40,pw=W-L-R,ph=H-T-B,bw=pw/NM, vals=meses.map((_,k)=>cub[k]?tot[k]:pT[k]); const mxv=Math.max(...vals,1)*1.15; const yv=v=>T+ph-v/mxv*ph;
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;font-family:inherit;" role="img" aria-label="Trabajos por mes y proyección de julio 2026 a julio 2027 de ${esc(nom)}"><line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" stroke="currentColor" stroke-opacity=".25"/><text x="${L-4}" y="${T+4}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${Math.round(mxv)}</text>`;
+  const W=360,H=140,L=30,R=8,T=14,B=38,pw=W-L-R,ph=H-T-B,bw=pw/NM, vals=meses.map((_,k)=>cub[k]?tot[k]:pT[k]); const mxv=Math.max(...vals,1)*1.15; const yv=v=>T+ph-v/mxv*ph;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:400px;height:auto;display:block;margin:0 auto;font-family:inherit;" role="img" aria-label="Trabajos por mes y proyección de julio 2026 a julio 2027 de ${esc(nom)}"><line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" stroke="currentColor" stroke-opacity=".25"/><text x="${L-4}" y="${T+4}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${Math.round(mxv)}</text>`;
   meses.forEach((mm,k)=>{ const cx=L+k*bw+bw/2, real=cub[k], v=real?tot[k]:pT[k], y=yv(v);
     s+= real?`<rect x="${cx-bw/2+2}" y="${y}" width="${bw-4}" height="${T+ph-y}" rx="2" fill="${k===lastK&&parcial?'#6fb3e0':'#2b8ccf'}"/><text x="${cx}" y="${y-3}" font-size="8" font-weight="700" text-anchor="middle" fill="currentColor">${v}</text>`
       :`<rect x="${cx-bw/2+2}" y="${y}" width="${bw-4}" height="${T+ph-y}" rx="2" fill="#f08a0022" stroke="#f08a00" stroke-width="1.5" stroke-dasharray="3 2"/><text x="${cx}" y="${y-3}" font-size="8" font-weight="700" text-anchor="middle" fill="#f08a00">${Math.round(v)}</text>`;
-    s+=`<text transform="translate(${cx+2},${T+ph+8}) rotate(50)" font-size="${NM>16?6.5:7.5}" fill="${real?'currentColor':'#f08a00'}">${MN[mm.m]} ${String(mm.y).slice(2)}</text>`; });
+    s+=`<text transform="translate(${cx+4},${T+ph+8}) rotate(-45)" text-anchor="end" font-size="${NM>16?6.5:7.5}" fill="${real?'currentColor':'#f08a00'}">${MN[mm.m]} ${String(mm.y).slice(2)}</text>`; });
   s+='</svg>';
   const prox=lastK+1<NM?pT[lastK+1]:null;
   return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Proyección ${MN[M0[1]]} ${M0[0]} – jul 2027</b><div class="ev-int">${esc(nom)} · trabajos por mes (real y proyectado)</div></div>${s}<div class="kpi-strip c3" style="margin-top:6px;">${kc(prox!=null?fnum(prox,0):'—','Trabajos próx. mes','kpi-orange')}${kc(fnum(totAnual,0),'Trabajos '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-blue')}${costo?kc(fm(facAnual),'Facturado '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-green',1):kc(fnum(totAnual/NM,1),'Promedio mensual','kpi-green')}</div><div class="ev-int" style="margin-top:4px;"><span style="color:#2b8ccf;">■</span> real${parcial?' (celeste: mes en curso, incompleto)':''} · <span style="color:#f08a00;">▭</span> proyectado (${fitN<3?'promedio':'tendencia lineal'} sobre ${fitN} mes(es) con datos completos). Los meses sin turnos cargados se estiman. El total suma lo real más lo proyectado. Es una estimación.</div></div>`;
@@ -496,7 +496,7 @@ function proyeccion(mios,nom){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v22</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v24</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -1421,7 +1421,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v22</div>
+  <div class="note">Versión de la app: v24</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
