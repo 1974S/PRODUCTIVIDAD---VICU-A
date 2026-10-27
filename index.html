@@ -449,8 +449,10 @@ function vInicio(c){
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
-    const u=mios[0], k=kpiTurno(u.id);
-    h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>Último turno</b> · ${fmtD(u.inicio)} al ${fmtD(u.fin)}</div><div class="plan-int">${mios.length} turno(s)</div></div></div>`+kpiBlock(k);
+    let pid=''; try{ pid=localStorage.getItem('pv_per_'+slug(n))||''; }catch(e){}
+    const u=mios.find(x=>x.id===pid)||mios[0], k=kpiTurno(u.id);
+    h+=`<div class="fg" style="margin-bottom:8px;"><label class="fl">Período a ver</label><select class="fs" onchange="try{localStorage.setItem('pv_per_${slug(n)}',this.value)}catch(e){};render()">${mios.map((x,i)=>`<option value="${x.id}" ${x.id===u.id?'selected':''}>${fmtD(x.inicio)} al ${fmtD(x.fin)}${i===0?' (último)':''}</option>`).join('')}</select></div>`;
+    h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>${u===mios[0]?'Último turno':'Turno'}</b> · ${fmtD(u.inicio)} al ${fmtD(u.fin)}</div><div class="plan-int">${mios.length} turno(s)</div></div></div>`+kpiBlock(k);
     if(mios.length>1){
       const ks=mios.map(t=>kpiTurno(t.id)); const av=f=>ks.reduce((s,x)=>s+f(x),0)/ks.length;
       h+=`<div class="note">Promedio por turno (${ks.length}): ${fnum(av(x=>x.total))} trabajos · ${fnum(av(x=>x.backlogs))} backlogs · ${fnum(av(x=>x.qcTotal))} insp. QC`+(ocultarCostos()?'':` · ${fm(av(x=>x.fact))} facturado`)+`</div>`;
