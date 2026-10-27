@@ -448,23 +448,22 @@ function pareto(mios,nom){
   let it=Object.keys(ag).map(k=>[k,ag[k]]).sort((a,b)=>b[1]-a[1]); const tot=it.reduce((s,x)=>s+x[1],0);
   if(!tot) return '';
   if(it.length>9){ const r=it.slice(8).reduce((s,x)=>s+x[1],0); it=it.slice(0,8); it.push(['Otros',r]); }
-  let a80=0, nv=0; for(const x of it){ nv++; a80+=x[1]; if(a80>=tot*.8) break; } // "pocos vitales": los que llegan al 80%
-  const W=360,H=215,L=50,R=34,T=30,B=76, pw=W-L-R, ph=H-T-B, bw=pw/it.length, mx=Math.max(...it.map(x=>x[1])); let ac=0;
+  let a80=0; const top=new Set(); for(const x of it.slice().sort((a,b)=>b[1]-a[1])){ top.add(x[0]); a80+=x[1]; if(a80>=tot*.8) break; }
+  it=it.map(x=>[x[0],x[1],top.has(x[0])]).sort((a,b)=>a[1]-b[1]); const nv=top.size;
+  const W=360,H=215,L=50,R=34,T=28,B=76, pw=W-L-R, ph=H-T-B, bw=pw/it.length, mx=Math.max(...it.map(x=>x[1])); let ac=0;
   const stp=Math.max(1,Math.ceil(mx/10)), mxa=stp*10; const yv=v=>T+ph-v/mxa*ph, yp=p=>T+ph-p/100*ph;
-  const VC='#2b8ccf', UC='#f2a65a', LC='#e8710a', xb=L+nv*bw;
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:520px;height:auto;display:block;margin:0;font-family:inherit;" role="img" aria-label="Pareto de trabajos por tipo de reparación de ${esc(nom)}">`;
-  s+=`<rect x="${L}" y="${T}" width="${xb-L}" height="${ph}" fill="${VC}" fill-opacity=".10"/>`;
-  for(let p=0;p<=100;p+=10){ const c80=p===80; s+=`<line x1="${L}" x2="${W-R}" y1="${yp(p)}" y2="${yp(p)}" stroke="currentColor" stroke-opacity="${c80?.55:.15}" ${c80?'stroke-dasharray="4 3"':''}/><text x="${W-R+3}" y="${yp(p)+3}" font-size="8" fill="currentColor" fill-opacity=".7">${p}%</text><text x="${L-4}" y="${yp(p)+3}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${p/10*stp}</text>`; }
-  // rótulos de zonas
-  s+=`<text x="${(L+xb)/2}" y="${T-14}" font-size="9" font-weight="700" text-anchor="middle" fill="${VC}">POCOS VITALES</text><line x1="${L+2}" x2="${xb-2}" y1="${T-9}" y2="${T-9}" stroke="${VC}" stroke-width="1.5"/>`;
-  if(nv<it.length) s+=`<text x="${(xb+W-R)/2}" y="${T-14}" font-size="9" font-weight="700" text-anchor="middle" fill="${LC}">MUCHOS ÚTILES</text><line x1="${xb+2}" x2="${W-R-2}" y1="${T-9}" y2="${T-9}" stroke="${LC}" stroke-width="1.5"/>`;
-  s+=`<line x1="${xb}" x2="${xb}" y1="${T}" y2="${T+ph}" stroke="currentColor" stroke-opacity=".35" stroke-dasharray="3 3"/>`;
-  const pts=[]; it.forEach(([k,v],i)=>{ const x=L+i*bw, y=yv(v); ac+=v; const cx=x+bw/2, cy=yp(ac/tot*100); pts.push([cx,cy]);
-    s+=`<rect x="${x+3}" y="${y}" width="${bw-6}" height="${T+ph-y}" rx="2" fill="${i<nv?VC:UC}"/><text x="${cx}" y="${y-3}" font-size="9" font-weight="700" text-anchor="middle" fill="currentColor">${v}</text>`;
+  const VC='#2b8ccf', GC='#9aa5b1', LC='#e8710a', xb=W-R-nv*bw;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:520px;height:auto;display:block;margin:0;font-family:inherit;color:#1f2a37;" role="img" aria-label="Pareto de trabajos por tipo de reparación de ${esc(nom)}">`;
+  s+=`<rect x="${xb}" y="${T}" width="${W-R-xb}" height="${ph}" fill="${VC}" fill-opacity=".13"/>`;
+  for(let p=0;p<=100;p+=10){ const c80=p===80; s+=`<line x1="${L}" x2="${W-R}" y1="${yp(p)}" y2="${yp(p)}" stroke="currentColor" stroke-opacity="${c80?.55:.15}" ${c80?'stroke-dasharray="4 3"':''}/><text x="${W-R+3}" y="${yp(p)+3}" font-size="8" fill="currentColor" fill-opacity=".75">${p}%</text><text x="${L-4}" y="${yp(p)+3}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".75">${p/10*stp}</text>`; }
+  s+=`<text x="${(xb+W-R)/2}" y="${T-13}" font-size="9" font-weight="700" text-anchor="middle" fill="${VC}">POCOS VITALES</text><line x1="${xb+2}" x2="${W-R-2}" y1="${T-8}" y2="${T-8}" stroke="${VC}" stroke-width="1.5"/>`;
+  if(nv<it.length) s+=`<text x="${(L+xb)/2}" y="${T-13}" font-size="9" font-weight="700" text-anchor="middle" fill="#6b7785">MUCHOS ÚTILES</text><line x1="${L+2}" x2="${xb-2}" y1="${T-8}" y2="${T-8}" stroke="#6b7785" stroke-width="1.5"/>`;
+  const pts=[]; it.forEach(([k,v,tp],i)=>{ const x=L+i*bw, y=yv(v); ac+=v; const cx=x+bw/2, cy=yp(ac/tot*100); pts.push([cx,cy]);
+    s+=`<rect x="${x+3}" y="${y}" width="${bw-6}" height="${T+ph-y}" rx="2" fill="${tp?VC:GC}"/><text x="${cx}" y="${y-3}" font-size="9" font-weight="700" text-anchor="middle" fill="currentColor">${v}</text>`;
     const lb=k.replace(/^\d+\s*[-–]\s*/,''); s+=`<text transform="translate(${cx+3},${T+ph+8}) rotate(-45)" text-anchor="end" font-size="8.5" fill="currentColor">${esc(lb.length>16?lb.slice(0,15)+'…':lb)}</text>`; });
   s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${LC}" stroke-width="2.2"/>`+pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.8" fill="${LC}"/>`).join('');
-  s+=`<text x="${xb+4}" y="${yp(80)-3}" font-size="8.5" font-weight="700" fill="currentColor">Regla 80/20</text></svg>`;
-  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Diagrama de Pareto · trabajos por tipo de reparación</b><div class="ev-int">${esc(nom)} · todos los períodos (${mios.length}) · ${tot} trabajos</div></div>${s}<div class="ev-int" style="margin-top:4px;"><span style="color:${VC};">■</span> pocos vitales: ${nv} tipo(s) que explican el 80% de los trabajos · <span style="color:${UC};">■</span> muchos útiles: el resto · <span style="color:${LC};">●</span> % acumulado.</div></div>`;
+  s+=`<text x="${L+4}" y="${yp(80)-3}" font-size="8.5" font-weight="700" fill="currentColor">Regla 80/20</text></svg>`;
+  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Pareto de trabajos por tipo de reparación</b><div class="ev-int">${esc(nom)} · todos los períodos (${mios.length}) · ${tot} trabajos</div></div><div style="background:linear-gradient(180deg,#e6f1fa 0%,#ffffff 70%);border:1px solid #c9dceb;border-radius:12px;padding:8px 6px 4px;box-shadow:0 2px 8px rgba(30,80,130,.15);">${s}</div><div class="ev-int" style="margin-top:6px;"><span style="color:${VC};">■</span> pocos vitales: ${nv} tipo(s) que explican el 80% (a la derecha) · <span style="color:${GC};">■</span> resto · <span style="color:${LC};">●</span> % acumulado. Barras de menor a mayor.</div></div>`;
 }
 function proyeccion(mios,nom){
   const ids=new Set(mios.map(x=>x.id)); const trs=Object.values(S.trabajos).filter(x=>ids.has(x.turnoId)&&x.fecha);
@@ -503,7 +502,7 @@ function proyeccion(mios,nom){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v29</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v30</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -1428,7 +1427,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v29</div>
+  <div class="note">Versión de la app: v30</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
