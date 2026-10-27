@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#CC0000">
+<meta name="theme-color" content="#040d24">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Productividad Vicuña">
@@ -165,6 +165,36 @@ body[data-role="lectura"] .btn-add-nav, body[data-role="lectura"] .fab, body[dat
 .cal-leg i.dot-red,.cal-leg i.dot-prev,.cal-leg i.dot-cumpl,.cal-leg i.dot-org{display:inline-block;border-radius:50%;} .cal-leg span { display:flex; align-items:center; gap:4px; } .cal-leg i { width:7px; height:7px; display:inline-block; }
 .chart-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;align-items:stretch;margin-bottom:6px;}
 .chart-row .plan-card{margin:0;min-width:0;}
+
+/* ═══ TEMA HUD (visual de toda la app) ═══ */
+:root { --bg:#040d24; --card:#0a1d44; --border:#1d4a85; --text:#e6f6ff; --text2:#9cc3e6; --text3:#6f93bb; }
+html,body { background:#040d24; }
+body { background:radial-gradient(circle at 15% 0%,#0f3a78 0%,transparent 45%),radial-gradient(circle at 90% 100%,#0b2f6b 0%,transparent 40%),linear-gradient(160deg,#040d24 0%,#071a3d 55%,#030a1c 100%) fixed; color:var(--text); }
+.status-bar { background:#040d24; }
+.navbar { background:linear-gradient(180deg,#0a2352 0%,#06173a 100%); border-bottom:1px solid #35d0ff55; box-shadow:0 2px 18px rgba(53,208,255,.22); }
+.tabbar { background:transparent; }
+.brand-icon { background:rgba(53,208,255,.15); border:1px solid #35d0ff77; box-shadow:0 0 10px rgba(53,208,255,.4); }
+.brand-title { letter-spacing:.06em; text-transform:uppercase; font-size:15px; text-shadow:0 0 10px rgba(53,208,255,.6); }
+.btn-add-nav { background:rgba(53,208,255,.15); border:1px solid #35d0ff77; }
+.tab-btn { color:#6f93bb; text-transform:uppercase; letter-spacing:.08em; font-size:11px; }
+.tab-btn.active { color:#35d0ff; border-bottom-color:#35d0ff; text-shadow:0 0 8px rgba(53,208,255,.8); box-shadow:0 6px 10px -6px rgba(53,208,255,.7); }
+.kpi-card, .plan-card, .ev-card, .tbl-wrap { background:linear-gradient(160deg,rgba(14,50,108,.55),rgba(6,22,56,.75)); border:1px solid rgba(53,208,255,.28); box-shadow:inset 0 0 18px rgba(0,140,255,.10),0 0 10px rgba(0,120,255,.12); }
+.kpi-card { position:relative; }
+.kpi-card::before { content:''; position:absolute; left:0; top:0; width:10px; height:10px; border-left:2px solid #35d0ff; border-top:2px solid #35d0ff; border-radius:3px 0 0 0; }
+.kpi-num { font-family:'SF Mono','Cascadia Mono',Consolas,monospace; letter-spacing:.02em; text-shadow:0 0 12px currentColor; }
+.kpi-lbl { color:#7fa8d0; text-transform:uppercase; letter-spacing:.06em; font-size:8.5px; }
+.kpi-blue .kpi-num { color:#35d0ff; } .kpi-green .kpi-num { color:#3df5b0; } .kpi-orange .kpi-num { color:#ffb347; } .kpi-red .kpi-num { color:#ff6b6b; } .kpi-purple .kpi-num { color:#9aa6ff; }
+.sec-hdr { color:#35d0ff; letter-spacing:.18em; font-size:12px; display:flex; align-items:center; gap:8px; text-shadow:0 0 8px rgba(53,208,255,.5); }
+.sec-hdr::before { content:''; width:4px; height:14px; background:#35d0ff; box-shadow:0 0 8px #35d0ff; border-radius:2px; }
+.plan-note { background:rgba(4,13,36,.6); }
+.tbl-wrap th { color:#35d0ff; }
+.btn-primary { background:linear-gradient(180deg,#1aa7ff,#0a66d6); box-shadow:0 0 14px rgba(53,208,255,.45); }
+.btn-secondary { background:rgba(10,35,82,.7); color:#bfe9ff; border-color:#35d0ff55; }
+.fab { background:linear-gradient(180deg,#35d0ff,#0a66d6); box-shadow:0 0 22px rgba(53,208,255,.65); color:#04122e; }
+.sheet { background:linear-gradient(180deg,#0a2352,#06173a); border-top:1px solid #35d0ff77; box-shadow:0 -6px 30px rgba(53,208,255,.25); }
+.fi,.fs { background:#061636; border-color:#1d4a85; color:#e6f6ff; }
+.fi:focus,.fs:focus { border-color:#35d0ff; box-shadow:0 0 8px rgba(53,208,255,.5); }
+.chart-row .plan-card { box-shadow:0 0 16px rgba(0,140,255,.2); }
 </style>
 </head>
 <body>
@@ -450,7 +480,7 @@ function hud(svg,tag,sub){
 }
 function gauge(nom,u,k){
   const p=Math.max(0,Math.min(100,k.pProg||0)), R=42, C=2*Math.PI*R, d=C*p/100;
-  let s=`<svg viewBox="0 0 220 150" style="width:100%;max-width:300px;height:auto;display:block;margin:0 auto;font-family:inherit;color:#bfe9ff;" role="img" aria-label="Porcentaje programado de ${esc(nom)}">${HUD_DEFS}`;
+  let s=`<svg viewBox="0 0 220 150" style="width:100%;max-width:300px;height:auto;display:block;margin:0 auto;font-family:inherit;color:#bfe9ff;transform:perspective(700px) rotateX(26deg);transform-origin:50% 100%;filter:drop-shadow(0 12px 8px rgba(0,0,0,.5));" role="img" aria-label="Porcentaje programado de ${esc(nom)}">${HUD_DEFS}`;
   s+=`<g transform="translate(110,78)"><circle r="62" fill="none" stroke="#35d0ff" stroke-opacity=".35" stroke-dasharray="1 5" stroke-width="5"/><circle r="${R}" fill="none" stroke="#12356b" stroke-width="14"/><circle r="${R}" fill="none" stroke="#35d0ff" stroke-width="14" stroke-dasharray="${d} ${C-d}" transform="rotate(-90)" filter="url(#hglow)"/><circle r="${R-12}" fill="#071a3d"/><text y="6" font-size="22" font-weight="700" text-anchor="middle" fill="#fff">${Math.round(p)}<tspan font-size="10">%</tspan></text><text y="20" font-size="7" text-anchor="middle" fill="#7df9ff" letter-spacing="1">PROGRAMADO</text>`;
   [10,20,30,60].forEach(v=>{ const an=(v/100*360-90)*Math.PI/180; s+=`<text x="${Math.cos(an)*75}" y="${Math.sin(an)*75+3}" font-size="7.5" text-anchor="middle" fill="#6fa8dc">${v}%</text>`; });
   s+=`</g></svg>`;
@@ -472,7 +502,9 @@ function pareto(mios,nom){
   s+=`<text x="${(xb+W-R)/2}" y="${T-13}" font-size="9" font-weight="700" text-anchor="middle" fill="${VC}">POCOS VITALES</text><line x1="${xb+2}" x2="${W-R-2}" y1="${T-8}" y2="${T-8}" stroke="${VC}" stroke-width="1.5"/>`;
   if(nv<it.length) s+=`<text x="${(L+xb)/2}" y="${T-13}" font-size="9" font-weight="700" text-anchor="middle" fill="#7f9bc0">MUCHOS ÚTILES</text><line x1="${L+2}" x2="${xb-2}" y1="${T-8}" y2="${T-8}" stroke="#7f9bc0" stroke-width="1.5"/>`;
   const pts=[]; it.forEach(([k,v,tp],i)=>{ const x=L+i*bw, y=yv(v); ac+=v; const cx=x+bw/2, cy=yp(ac/tot*100); pts.push([cx,cy]);
-    s+=`<rect x="${x+3}" y="${y}" width="${bw-6}" height="${T+ph-y}" rx="2" fill="${tp?'url(#hg)':GC}" ${tp?'filter="url(#hglow)"':''}/><text x="${cx}" y="${y-3}" font-size="9" font-weight="700" text-anchor="middle" fill="currentColor">${v}</text>`;
+    { const bx=x+3, w=bw-10, d=5, e=d*.7, h=T+ph-y; if(h>0){
+      s+=`<polygon points="${bx+w},${y} ${bx+w+d},${y-e} ${bx+w+d},${y+h-e} ${bx+w},${y+h}" fill="${tp?'#0a4aa8':'#243f66'}"/><polygon points="${bx},${y} ${bx+d},${y-e} ${bx+w+d},${y-e} ${bx+w},${y}" fill="${tp?'#9ff4ff':'#6f8fb8'}"/><rect x="${bx}" y="${y}" width="${w}" height="${h}" fill="${tp?'url(#hg)':GC}" ${tp?'filter="url(#hglow)"':''}/>`; }
+      s+=`<text x="${cx+d/2}" y="${y-e-3}" font-size="9" font-weight="700" text-anchor="middle" fill="currentColor">${v}</text>`; }
     const lb=k.replace(/^\d+\s*[-–]\s*/,''); s+=`<text transform="translate(${cx+3},${T+ph+8}) rotate(-45)" text-anchor="end" font-size="8.5" fill="currentColor">${esc(lb.length>16?lb.slice(0,15)+'…':lb)}</text>`; });
   s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${LC}" stroke-width="2.2" filter="url(#hglow)"/>`+pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.8" fill="${LC}"/>`).join('');
   s+=`<text x="${L+4}" y="${yp(80)-3}" font-size="8.5" font-weight="700" fill="currentColor">Regla 80/20</text></svg>`;
@@ -501,7 +533,7 @@ function proyeccion(mios,nom){
   const totAnual=Math.round(tot.reduce((s,v,k)=>s+(cub[k]?v:0),0)+pT.reduce((s,v)=>s+(v||0),0));
   const facAnual=fac.reduce((s,v,k)=>s+(cub[k]?v:0),0)+pF.reduce((s,v)=>s+(v||0),0);
   const W=360,H=215,L=50,R=30,T=12,B=80,pw=W-L-R,ph=H-T-B,bw=pw/NM, vals=meses.map((_,k)=>cub[k]?tot[k]:pT[k]); const mxv=Math.max(...vals,1)*1.15; const yv=v=>T+ph-v/mxv*ph;
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:520px;height:auto;display:block;margin:0;font-family:inherit;color:#bfe9ff;" role="img" aria-label="Trabajos por mes y proyección de julio 2026 a julio 2027 de ${esc(nom)}">${HUD_DEFS}<line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" stroke="currentColor" stroke-opacity=".25"/><text x="${L-4}" y="${T+4}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${Math.round(mxv)}</text>`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:520px;height:auto;display:block;margin:0;font-family:inherit;color:#bfe9ff;transform:perspective(900px) rotateX(14deg);transform-origin:50% 100%;filter:drop-shadow(0 10px 8px rgba(0,0,0,.45));" role="img" aria-label="Trabajos por mes y proyección de julio 2026 a julio 2027 de ${esc(nom)}">${HUD_DEFS}<line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" stroke="currentColor" stroke-opacity=".25"/><text x="${L-4}" y="${T+4}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${Math.round(mxv)}</text>`;
   const P=meses.map((mm,k)=>{ const real=cub[k], v=real?tot[k]:pT[k]; return {cx:L+k*bw+bw/2,y:yv(v),v,real,mm,k}; });
   P.forEach(p=>{ s+=`<line x1="${p.cx}" x2="${p.cx}" y1="${T}" y2="${T+ph}" stroke="#35d0ff" stroke-opacity=".12"/>`; });
   [0.25,0.5,0.75].forEach(f=>{ s+=`<line x1="${L}" x2="${W-R}" y1="${T+ph*f}" y2="${T+ph*f}" stroke="#35d0ff" stroke-opacity=".10"/>`; });
@@ -524,7 +556,7 @@ function proyeccion(mios,nom){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v33</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v35</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -1449,7 +1481,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v33</div>
+  <div class="note">Versión de la app: v35</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }

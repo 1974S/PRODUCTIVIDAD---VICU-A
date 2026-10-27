@@ -1,4 +1,4 @@
-const CACHE='productividad-vicuna-v33';
+const CACHE='productividad-vicuna-v35';
 const CORE=['./','./index.html','./manifest.json','./icon-192.png','./icon-512.png'];
 const CDN=['cdnjs.cloudflare.com','www.gstatic.com'];
 self.addEventListener('install',e=>{ e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())); });
