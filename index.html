@@ -195,6 +195,12 @@ body { background:radial-gradient(circle at 15% 0%,#0f3a78 0%,transparent 45%),r
 .fi,.fs { background:#061636; border-color:#1d4a85; color:#e6f6ff; }
 .fi:focus,.fs:focus { border-color:#35d0ff; box-shadow:0 0 8px rgba(53,208,255,.5); }
 .chart-row .plan-card { box-shadow:0 0 16px rgba(0,140,255,.2); }
+
+input,textarea,select{background:#061636;color:#e6f6ff;border-color:#1d4a85;}
+textarea{border:1.5px solid #1d4a85;border-radius:10px;padding:10px;font-family:inherit;}
+textarea:focus,input:focus{outline:none;border-color:#35d0ff;box-shadow:0 0 8px rgba(53,208,255,.5);}
+.toast{background:linear-gradient(180deg,#0a2352,#06173a);border:1px solid #35d0ff77;color:#e6f6ff;box-shadow:0 0 16px rgba(53,208,255,.35);}
+::-webkit-scrollbar{width:8px;height:8px;}::-webkit-scrollbar-thumb{background:#1d4a85;border-radius:4px;}::-webkit-scrollbar-track{background:#040d24;}
 </style>
 </head>
 <body>
@@ -556,7 +562,7 @@ function proyeccion(mios,nom){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v35</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v36</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -1481,7 +1487,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v35</div>
+  <div class="note">Versión de la app: v36</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
@@ -1492,8 +1498,8 @@ function restore(f){ if(!f) return; const r=new FileReader(); r.onload=e=>{ try{
 const NOMBRE_ROL={admin:'Admin',carga:'Supervisor',lectura:'Supervisor Vicuña'};
 function mostrarLogin(){
   const ov=document.createElement('div'); ov.id='loginOverlay';
-  ov.style.cssText='position:fixed;inset:0;background:var(--bg,#0d0d0d);z-index:100000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;';
-  ov.innerHTML=`<div style="width:100%;max-width:340px;text-align:center;"><div style="width:64px;height:64px;border-radius:16px;background:var(--red,#CC0000);display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 16px;">📊</div><div style="font-size:20px;font-weight:800;color:var(--text,#fff);">Productividad Vicuña</div><div style="font-size:13px;color:var(--text3,#888);margin-bottom:24px;">Ingresá tu PIN de acceso</div><input id="pinInput" type="password" inputmode="numeric" maxlength="8" placeholder="••••" style="width:100%;text-align:center;font-size:26px;letter-spacing:8px;padding:14px;border-radius:12px;border:1.5px solid var(--border,#333);background:var(--card,#1a1a1a);color:var(--text,#fff);margin-bottom:12px;" onkeydown="if(event.key==='Enter')validarPin()"><button onclick="validarPin()" style="width:100%;padding:14px;border-radius:12px;background:var(--red,#CC0000);color:#fff;border:none;font-weight:700;font-size:16px;">Ingresar</button><div id="pinError" style="font-size:13px;color:#FF6B6B;margin-top:12px;min-height:18px;"></div></div>`;
+  ov.style.cssText='position:fixed;inset:0;background:radial-gradient(circle at 20% 0%,#0f3a78 0%,transparent 50%),linear-gradient(160deg,#040d24,#0a2352 60%,#030a1c);z-index:100000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;';
+  ov.innerHTML=`<div style="width:100%;max-width:340px;text-align:center;"><div style="width:64px;height:64px;border-radius:16px;background:rgba(53,208,255,.15);border:1px solid #35d0ff99;box-shadow:0 0 22px rgba(53,208,255,.55);display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 16px;">📊</div><div style="font-size:20px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#e6f6ff;text-shadow:0 0 12px rgba(53,208,255,.7);">Productividad Vicuña</div><div style="font-size:13px;color:var(--text3,#888);margin-bottom:24px;">Ingresá tu PIN de acceso</div><input id="pinInput" type="password" inputmode="numeric" maxlength="8" placeholder="••••" style="width:100%;text-align:center;font-size:26px;letter-spacing:8px;padding:14px;border-radius:12px;border:1.5px solid #35d0ff88;box-shadow:0 0 12px rgba(53,208,255,.3);background:#061636;color:#e6f6ff;margin-bottom:12px;" onkeydown="if(event.key==='Enter')validarPin()"><button onclick="validarPin()" style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(180deg,#1aa7ff,#0a66d6);box-shadow:0 0 16px rgba(53,208,255,.5);color:#fff;border:none;font-weight:700;font-size:16px;text-transform:uppercase;letter-spacing:.1em;">Ingresar</button><div id="pinError" style="font-size:13px;color:#FF6B6B;margin-top:12px;min-height:18px;"></div></div>`;
   document.body.appendChild(ov); setTimeout(()=>{ const i=$('pinInput'); if(i) i.focus(); },100);
 }
 function validarPin(){
