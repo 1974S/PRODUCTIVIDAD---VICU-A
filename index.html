@@ -450,10 +450,10 @@ function pareto(mios,nom){
   let a80=0; const top=new Set(); for(const x of it.slice().sort((a,b)=>b[1]-a[1])){ top.add(x[0]); a80+=x[1]; if(a80>=tot*.8) break; }
   it=it.map(x=>[x[0],x[1],top.has(x[0])]).sort((a,b)=>a[1]-b[1]);
   const W=360,H=215,L=50,R=30,T=12,B=80, pw=W-L-R, ph=H-T-B, bw=pw/it.length, mx=Math.max(...it.map(x=>x[1])); let ac=0;
-  const yv=v=>T+ph-v/mx*ph, yp=p=>T+ph-p/100*ph;
+  const stp=Math.max(1,Math.ceil(mx/10)), mxa=stp*10; const yv=v=>T+ph-v/mxa*ph, yp=p=>T+ph-p/100*ph;
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:400px;height:auto;display:block;margin:0 auto;font-family:inherit;" role="img" aria-label="Pareto de trabajos por tipo de reparación de ${esc(nom)}">`;
-  [0,50,80,100].forEach(p=>{ s+=`<line x1="${L}" x2="${W-R}" y1="${yp(p)}" y2="${yp(p)}" stroke="currentColor" stroke-opacity="${p===80?.5:.15}" ${p===80?'stroke-dasharray="4 3"':''}/><text x="${W-R+3}" y="${yp(p)+3}" font-size="8" fill="currentColor" fill-opacity=".7">${p}%</text>`; });
-  s+=`<text x="${L-4}" y="${T+4}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${mx}</text><text x="${L-4}" y="${T+ph+3}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">0</text>`;
+  for(let p=0;p<=100;p+=10){ const c80=p===80; s+=`<line x1="${L}" x2="${W-R}" y1="${yp(p)}" y2="${yp(p)}" stroke="currentColor" stroke-opacity="${c80?.55:.15}" ${c80?'stroke-dasharray="4 3"':''}/><text x="${W-R+3}" y="${yp(p)+3}" font-size="8" fill="currentColor" fill-opacity=".7">${p}%</text><text x="${L-4}" y="${yp(p)+3}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${p/10*stp}</text>`; }
+
   const pts=[]; it.forEach(([k,v,tp],i)=>{ const x=L+i*bw, y=yv(v); ac+=v; const cx=x+bw/2, cy=yp(ac/tot*100); pts.push([cx,cy]);
     s+=`<rect x="${x+3}" y="${y}" width="${bw-6}" height="${T+ph-y}" rx="2" fill="${tp?'#2b8ccf':'#9aa5b1'}"/><text x="${cx}" y="${y-3}" font-size="9" font-weight="700" text-anchor="middle" fill="currentColor">${v}</text>`;
     const lb=k.replace(/^\d+\s*[-–]\s*/,''); s+=`<text transform="translate(${cx+3},${T+ph+8}) rotate(-45)" text-anchor="end" font-size="8.5" fill="currentColor">${esc(lb.length>16?lb.slice(0,15)+'…':lb)}</text>`; });
@@ -499,7 +499,7 @@ function proyeccion(mios,nom){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v25</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v26</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -1424,7 +1424,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v25</div>
+  <div class="note">Versión de la app: v26</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
