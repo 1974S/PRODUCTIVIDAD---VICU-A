@@ -443,6 +443,11 @@ function kpiBlock(k){
   return h;
 }
 
+const HUD_DEFS='<defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cf0ff"/><stop offset="1" stop-color="#0a66d6"/></linearGradient><filter id="hglow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+function hud(svg,tag,sub){
+  const br='position:absolute;width:14px;height:14px;border:2px solid #35d0ff;';
+  return `<div style="position:relative;background:radial-gradient(circle at 20% 0%,#0f3a78 0%,transparent 55%),linear-gradient(135deg,#040d24 0%,#0a2352 60%,#051330 100%);border:1px solid #1d4f8f;border-radius:10px;padding:26px 10px 6px;box-shadow:inset 0 0 36px rgba(0,150,255,.22),0 0 16px rgba(0,120,255,.25);color:#bfe9ff;overflow:hidden;"><div style="position:absolute;left:12px;top:8px;font:700 10px/1 monospace;letter-spacing:2px;color:#35d0ff;">${tag}</div><div style="position:absolute;right:12px;top:8px;font:10px/1 monospace;letter-spacing:1px;color:#6fa8dc;">${sub||''}</div><span style="${br}left:3px;top:3px;border-right:0;border-bottom:0;"></span><span style="${br}right:3px;top:3px;border-left:0;border-bottom:0;"></span><span style="${br}left:3px;bottom:3px;border-right:0;border-top:0;"></span><span style="${br}right:3px;bottom:3px;border-left:0;border-top:0;"></span>${svg}</div>`;
+}
 function pareto(mios,nom){
   const ag={}; mios.forEach(x=>{ const k=kpiTurno(x.id); Object.keys(k.porTipo).forEach(tp=>{ ag[tp]=(ag[tp]||0)+k.porTipo[tp].p+k.porTipo[tp].i; }); });
   let it=Object.keys(ag).map(k=>[k,ag[k]]).sort((a,b)=>b[1]-a[1]); const tot=it.reduce((s,x)=>s+x[1],0);
@@ -452,18 +457,18 @@ function pareto(mios,nom){
   it=it.map(x=>[x[0],x[1],top.has(x[0])]).sort((a,b)=>a[1]-b[1]); const nv=top.size;
   const W=360,H=215,L=50,R=34,T=28,B=76, pw=W-L-R, ph=H-T-B, bw=pw/it.length, mx=Math.max(...it.map(x=>x[1])); let ac=0;
   const stp=Math.max(1,Math.ceil(mx/10)), mxa=stp*10; const yv=v=>T+ph-v/mxa*ph, yp=p=>T+ph-p/100*ph;
-  const VC='#2b8ccf', GC='#9aa5b1', LC='#e8710a', xb=W-R-nv*bw;
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:520px;height:auto;display:block;margin:0;font-family:inherit;color:#1f2a37;" role="img" aria-label="Pareto de trabajos por tipo de reparación de ${esc(nom)}">`;
-  s+=`<rect x="${xb}" y="${T}" width="${W-R-xb}" height="${ph}" fill="${VC}" fill-opacity=".13"/>`;
+  const VC='#35d0ff', GC='#3d6396', LC='#e6fbff', xb=W-R-nv*bw;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:520px;height:auto;display:block;margin:0;font-family:inherit;color:#bfe9ff;" role="img" aria-label="Pareto de trabajos por tipo de reparación de ${esc(nom)}">${HUD_DEFS}`;
+  s+=`<rect x="${xb}" y="${T}" width="${W-R-xb}" height="${ph}" fill="${VC}" fill-opacity=".10"/>`;
   for(let p=0;p<=100;p+=10){ const c80=p===80; s+=`<line x1="${L}" x2="${W-R}" y1="${yp(p)}" y2="${yp(p)}" stroke="currentColor" stroke-opacity="${c80?.55:.15}" ${c80?'stroke-dasharray="4 3"':''}/><text x="${W-R+3}" y="${yp(p)+3}" font-size="8" fill="currentColor" fill-opacity=".75">${p}%</text><text x="${L-4}" y="${yp(p)+3}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".75">${p/10*stp}</text>`; }
   s+=`<text x="${(xb+W-R)/2}" y="${T-13}" font-size="9" font-weight="700" text-anchor="middle" fill="${VC}">POCOS VITALES</text><line x1="${xb+2}" x2="${W-R-2}" y1="${T-8}" y2="${T-8}" stroke="${VC}" stroke-width="1.5"/>`;
-  if(nv<it.length) s+=`<text x="${(L+xb)/2}" y="${T-13}" font-size="9" font-weight="700" text-anchor="middle" fill="#6b7785">MUCHOS ÚTILES</text><line x1="${L+2}" x2="${xb-2}" y1="${T-8}" y2="${T-8}" stroke="#6b7785" stroke-width="1.5"/>`;
+  if(nv<it.length) s+=`<text x="${(L+xb)/2}" y="${T-13}" font-size="9" font-weight="700" text-anchor="middle" fill="#7f9bc0">MUCHOS ÚTILES</text><line x1="${L+2}" x2="${xb-2}" y1="${T-8}" y2="${T-8}" stroke="#7f9bc0" stroke-width="1.5"/>`;
   const pts=[]; it.forEach(([k,v,tp],i)=>{ const x=L+i*bw, y=yv(v); ac+=v; const cx=x+bw/2, cy=yp(ac/tot*100); pts.push([cx,cy]);
-    s+=`<rect x="${x+3}" y="${y}" width="${bw-6}" height="${T+ph-y}" rx="2" fill="${tp?VC:GC}"/><text x="${cx}" y="${y-3}" font-size="9" font-weight="700" text-anchor="middle" fill="currentColor">${v}</text>`;
+    s+=`<rect x="${x+3}" y="${y}" width="${bw-6}" height="${T+ph-y}" rx="2" fill="${tp?'url(#hg)':GC}" ${tp?'filter="url(#hglow)"':''}/><text x="${cx}" y="${y-3}" font-size="9" font-weight="700" text-anchor="middle" fill="currentColor">${v}</text>`;
     const lb=k.replace(/^\d+\s*[-–]\s*/,''); s+=`<text transform="translate(${cx+3},${T+ph+8}) rotate(-45)" text-anchor="end" font-size="8.5" fill="currentColor">${esc(lb.length>16?lb.slice(0,15)+'…':lb)}</text>`; });
-  s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${LC}" stroke-width="2.2"/>`+pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.8" fill="${LC}"/>`).join('');
+  s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${LC}" stroke-width="2.2" filter="url(#hglow)"/>`+pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.8" fill="${LC}"/>`).join('');
   s+=`<text x="${L+4}" y="${yp(80)-3}" font-size="8.5" font-weight="700" fill="currentColor">Regla 80/20</text></svg>`;
-  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Pareto de trabajos por tipo de reparación</b><div class="ev-int">${esc(nom)} · todos los períodos (${mios.length}) · ${tot} trabajos</div></div><div style="background:radial-gradient(circle at 12% 18%,rgba(255,255,255,.75) 0 7%,transparent 8%),radial-gradient(circle at 88% 12%,rgba(255,255,255,.55) 0 9%,transparent 10%),radial-gradient(circle at 80% 85%,rgba(120,170,210,.45) 0 12%,transparent 13%),radial-gradient(circle at 8% 80%,rgba(140,175,205,.5) 0 10%,transparent 11%),linear-gradient(135deg,#aebfce 0%,#cfdce8 45%,#9db3c6 100%);border-radius:12px;padding:14px 14px 0;"><div style="background:#fff;border:6px solid #e9eef3;outline:1px solid #b9c6d2;border-radius:8px;padding:6px 6px 2px;box-shadow:0 6px 16px rgba(20,50,80,.35);">${s}</div><div style="width:34%;height:12px;margin:0 auto;background:linear-gradient(#d5dde5,#aab8c5);border-radius:0 0 6px 6px;"></div><div style="width:58%;height:7px;margin:0 auto;background:#8ea0b1;border-radius:6px 6px 0 0;"></div></div><div class="ev-int" style="margin-top:6px;"><span style="color:${VC};">■</span> pocos vitales: ${nv} tipo(s) que explican el 80% (a la derecha) · <span style="color:${GC};">■</span> resto · <span style="color:${LC};">●</span> % acumulado. Barras de menor a mayor.</div></div>`;
+  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Pareto de trabajos por tipo de reparación</b><div class="ev-int">${esc(nom)} · todos los períodos (${mios.length}) · ${tot} trabajos</div></div>${hud(s,'DATA 01 · PARETO',tot+' TRABAJOS')}<div class="ev-int" style="margin-top:6px;"><span style="color:${VC};">■</span> pocos vitales: ${nv} tipo(s) que explican el 80% (a la derecha) · <span style="color:${GC};">■</span> resto · <span style="color:${LC};">●</span> % acumulado. Barras de menor a mayor.</div></div>`;
 }
 function proyeccion(mios,nom){
   const ids=new Set(mios.map(x=>x.id)); const trs=Object.values(S.trabajos).filter(x=>ids.has(x.turnoId)&&x.fecha);
@@ -488,21 +493,21 @@ function proyeccion(mios,nom){
   const totAnual=Math.round(tot.reduce((s,v,k)=>s+(cub[k]?v:0),0)+pT.reduce((s,v)=>s+(v||0),0));
   const facAnual=fac.reduce((s,v,k)=>s+(cub[k]?v:0),0)+pF.reduce((s,v)=>s+(v||0),0);
   const W=360,H=215,L=50,R=30,T=12,B=80,pw=W-L-R,ph=H-T-B,bw=pw/NM, vals=meses.map((_,k)=>cub[k]?tot[k]:pT[k]); const mxv=Math.max(...vals,1)*1.15; const yv=v=>T+ph-v/mxv*ph;
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:520px;height:auto;display:block;margin:0;font-family:inherit;" role="img" aria-label="Trabajos por mes y proyección de julio 2026 a julio 2027 de ${esc(nom)}"><line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" stroke="currentColor" stroke-opacity=".25"/><text x="${L-4}" y="${T+4}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${Math.round(mxv)}</text>`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:520px;height:auto;display:block;margin:0;font-family:inherit;color:#bfe9ff;" role="img" aria-label="Trabajos por mes y proyección de julio 2026 a julio 2027 de ${esc(nom)}">${HUD_DEFS}<line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" stroke="currentColor" stroke-opacity=".25"/><text x="${L-4}" y="${T+4}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${Math.round(mxv)}</text>`;
   meses.forEach((mm,k)=>{ const cx=L+k*bw+bw/2, real=cub[k], v=real?tot[k]:pT[k], y=yv(v);
-    s+= real?`<rect x="${cx-bw/2+2}" y="${y}" width="${bw-4}" height="${T+ph-y}" rx="2" fill="${k===lastK&&parcial?'#6fb3e0':'#2b8ccf'}"/><text x="${cx}" y="${y-3}" font-size="8" font-weight="700" text-anchor="middle" fill="currentColor">${v}</text>`
-      :`<rect x="${cx-bw/2+2}" y="${y}" width="${bw-4}" height="${T+ph-y}" rx="2" fill="#f08a0022" stroke="#f08a00" stroke-width="1.5" stroke-dasharray="3 2"/><text x="${cx}" y="${y-3}" font-size="8" font-weight="700" text-anchor="middle" fill="#f08a00">${Math.round(v)}</text>`;
-    s+=`<text transform="translate(${cx+4},${T+ph+8}) rotate(-45)" text-anchor="end" font-size="${NM>16?6.5:7.5}" fill="${real?'currentColor':'#f08a00'}">${MN[mm.m]} ${String(mm.y).slice(2)}</text>`; });
+    s+= real?`<rect x="${cx-bw/2+2}" y="${y}" width="${bw-4}" height="${T+ph-y}" rx="2" fill="${k===lastK&&parcial?'#6fd8ff':'url(#hg)'}" ${k===lastK&&parcial?'fill-opacity=".6"':'filter="url(#hglow)"'}/><text x="${cx}" y="${y-3}" font-size="8" font-weight="700" text-anchor="middle" fill="currentColor">${v}</text>`
+      :`<rect x="${cx-bw/2+2}" y="${y}" width="${bw-4}" height="${T+ph-y}" rx="2" fill="#35d0ff1f" stroke="#7df9ff" stroke-width="1.3" stroke-dasharray="3 2"/><text x="${cx}" y="${y-3}" font-size="8" font-weight="700" text-anchor="middle" fill="#7df9ff">${Math.round(v)}</text>`;
+    s+=`<text transform="translate(${cx+4},${T+ph+8}) rotate(-45)" text-anchor="end" font-size="${NM>16?6.5:7.5}" fill="${real?'currentColor':'#7df9ff'}">${MN[mm.m]} ${String(mm.y).slice(2)}</text>`; });
   s+='</svg>';
   const prox=lastK+1<NM?pT[lastK+1]:null;
-  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Proyección ${MN[M0[1]]} ${M0[0]} – jul 2027</b><div class="ev-int">${esc(nom)} · trabajos por mes (real y proyectado)</div></div>${s}<div class="kpi-strip c3" style="margin-top:6px;">${kc(prox!=null?fnum(prox,0):'—','Trabajos próx. mes','kpi-orange')}${kc(fnum(totAnual,0),'Trabajos '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-blue')}${costo?kc(fm(facAnual),'Facturado '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-green',1):kc(fnum(totAnual/NM,1),'Promedio mensual','kpi-green')}</div><div class="ev-int" style="margin-top:4px;"><span style="color:#2b8ccf;">■</span> real${parcial?' (celeste: mes en curso, incompleto)':''} · <span style="color:#f08a00;">▭</span> proyectado (${fitN<3?'promedio':'tendencia lineal'} sobre ${fitN} mes(es) con datos completos). Los meses sin turnos cargados se estiman. El total suma lo real más lo proyectado. Es una estimación.</div></div>`;
+  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Proyección ${MN[M0[1]]} ${M0[0]} – jul 2027</b><div class="ev-int">${esc(nom)} · trabajos por mes (real y proyectado)</div></div>${hud(s,'DATA 02 · PROYECCIÓN',(MN[M0[1]]+' '+String(M0[0]).slice(2)+' – JUL 27').toUpperCase())}<div class="kpi-strip c3" style="margin-top:6px;">${kc(prox!=null?fnum(prox,0):'—','Trabajos próx. mes','kpi-orange')}${kc(fnum(totAnual,0),'Trabajos '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-blue')}${costo?kc(fm(facAnual),'Facturado '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-green',1):kc(fnum(totAnual/NM,1),'Promedio mensual','kpi-green')}</div><div class="ev-int" style="margin-top:4px;"><span style="color:#35d0ff;">■</span> real${parcial?' (celeste: mes en curso, incompleto)':''} · <span style="color:#7df9ff;">▭</span> proyectado (${fitN<3?'promedio':'tendencia lineal'} sobre ${fitN} mes(es) con datos completos). Los meses sin turnos cargados se estiman. El total suma lo real más lo proyectado. Es una estimación.</div></div>`;
 }
 
 /* ─── INICIO: comparativo de supervisores ─── */
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v31</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v32</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -1427,7 +1432,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v31</div>
+  <div class="note">Versión de la app: v32</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
