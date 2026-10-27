@@ -163,7 +163,7 @@ body[data-role="lectura"] .btn-add-nav, body[data-role="lectura"] .fab, body[dat
 .mc-day.sel:not(.today) { background:rgba(204,0,0,0.15); border:1.5px solid var(--red); border-radius:50%; width:30px; height:30px; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:auto; padding:0; color:var(--red); font-weight:700; }
 .cal-leg { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:10px; font-size:10.5px; color:var(--text3); }
 .cal-leg i.dot-red,.cal-leg i.dot-prev,.cal-leg i.dot-cumpl,.cal-leg i.dot-org{display:inline-block;border-radius:50%;} .cal-leg span { display:flex; align-items:center; gap:4px; } .cal-leg i { width:7px; height:7px; display:inline-block; }
-.chart-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:10px;align-items:stretch;margin-bottom:6px;}
+.chart-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;align-items:stretch;margin-bottom:6px;}
 .chart-row .plan-card{margin:0;min-width:0;}
 </style>
 </head>
@@ -443,10 +443,18 @@ function kpiBlock(k){
   return h;
 }
 
-const HUD_DEFS='<defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cf0ff"/><stop offset="1" stop-color="#0a66d6"/></linearGradient><filter id="hglow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+const HUD_DEFS='<defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cf0ff"/><stop offset="1" stop-color="#0a66d6"/></linearGradient><linearGradient id="ha" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#35d0ff" stop-opacity=".45"/><stop offset="1" stop-color="#0a66d6" stop-opacity=".03"/></linearGradient><filter id="hglow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
 function hud(svg,tag,sub){
   const br='position:absolute;width:14px;height:14px;border:2px solid #35d0ff;';
   return `<div style="position:relative;background:radial-gradient(circle at 20% 0%,#0f3a78 0%,transparent 55%),linear-gradient(135deg,#040d24 0%,#0a2352 60%,#051330 100%);border:1px solid #1d4f8f;border-radius:10px;padding:26px 10px 6px;box-shadow:inset 0 0 36px rgba(0,150,255,.22),0 0 16px rgba(0,120,255,.25);color:#bfe9ff;overflow:hidden;"><div style="position:absolute;left:12px;top:8px;font:700 10px/1 monospace;letter-spacing:2px;color:#35d0ff;">${tag}</div><div style="position:absolute;right:12px;top:8px;font:10px/1 monospace;letter-spacing:1px;color:#6fa8dc;">${sub||''}</div><span style="${br}left:3px;top:3px;border-right:0;border-bottom:0;"></span><span style="${br}right:3px;top:3px;border-left:0;border-bottom:0;"></span><span style="${br}left:3px;bottom:3px;border-right:0;border-top:0;"></span><span style="${br}right:3px;bottom:3px;border-left:0;border-top:0;"></span>${svg}</div>`;
+}
+function gauge(nom,u,k){
+  const p=Math.max(0,Math.min(100,k.pProg||0)), R=42, C=2*Math.PI*R, d=C*p/100;
+  let s=`<svg viewBox="0 0 220 150" style="width:100%;max-width:300px;height:auto;display:block;margin:0 auto;font-family:inherit;color:#bfe9ff;" role="img" aria-label="Porcentaje programado de ${esc(nom)}">${HUD_DEFS}`;
+  s+=`<g transform="translate(110,78)"><circle r="62" fill="none" stroke="#35d0ff" stroke-opacity=".35" stroke-dasharray="1 5" stroke-width="5"/><circle r="${R}" fill="none" stroke="#12356b" stroke-width="14"/><circle r="${R}" fill="none" stroke="#35d0ff" stroke-width="14" stroke-dasharray="${d} ${C-d}" transform="rotate(-90)" filter="url(#hglow)"/><circle r="${R-12}" fill="#071a3d"/><text y="6" font-size="22" font-weight="700" text-anchor="middle" fill="#fff">${Math.round(p)}<tspan font-size="10">%</tspan></text><text y="20" font-size="7" text-anchor="middle" fill="#7df9ff" letter-spacing="1">PROGRAMADO</text>`;
+  [10,20,30,60].forEach(v=>{ const an=(v/100*360-90)*Math.PI/180; s+=`<text x="${Math.cos(an)*75}" y="${Math.sin(an)*75+3}" font-size="7.5" text-anchor="middle" fill="#6fa8dc">${v}%</text>`; });
+  s+=`</g></svg>`;
+  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Programado vs imprevisto</b><div class="ev-int">${esc(nom)} · período ${fmtD(u.inicio)} al ${fmtD(u.fin)}</div></div>${hud(s,'DATA 03 · MIX',k.total+' TRABAJOS')}<div class="kpi-strip c3" style="margin-top:6px;">${kc(k.prog,'Programados','kpi-green')}${kc(k.imprev,'Imprevistos','kpi-orange')}${kc(fnum(k.pProg,0)+'%','% programado','kpi-blue')}</div></div>`;
 }
 function pareto(mios,nom){
   const ag={}; mios.forEach(x=>{ const k=kpiTurno(x.id); Object.keys(k.porTipo).forEach(tp=>{ ag[tp]=(ag[tp]||0)+k.porTipo[tp].p+k.porTipo[tp].i; }); });
@@ -494,20 +502,29 @@ function proyeccion(mios,nom){
   const facAnual=fac.reduce((s,v,k)=>s+(cub[k]?v:0),0)+pF.reduce((s,v)=>s+(v||0),0);
   const W=360,H=215,L=50,R=30,T=12,B=80,pw=W-L-R,ph=H-T-B,bw=pw/NM, vals=meses.map((_,k)=>cub[k]?tot[k]:pT[k]); const mxv=Math.max(...vals,1)*1.15; const yv=v=>T+ph-v/mxv*ph;
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:520px;height:auto;display:block;margin:0;font-family:inherit;color:#bfe9ff;" role="img" aria-label="Trabajos por mes y proyección de julio 2026 a julio 2027 de ${esc(nom)}">${HUD_DEFS}<line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" stroke="currentColor" stroke-opacity=".25"/><text x="${L-4}" y="${T+4}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${Math.round(mxv)}</text>`;
-  meses.forEach((mm,k)=>{ const cx=L+k*bw+bw/2, real=cub[k], v=real?tot[k]:pT[k], y=yv(v);
-    s+= real?`<rect x="${cx-bw/2+2}" y="${y}" width="${bw-4}" height="${T+ph-y}" rx="2" fill="${k===lastK&&parcial?'#6fd8ff':'url(#hg)'}" ${k===lastK&&parcial?'fill-opacity=".6"':'filter="url(#hglow)"'}/><text x="${cx}" y="${y-3}" font-size="8" font-weight="700" text-anchor="middle" fill="currentColor">${v}</text>`
-      :`<rect x="${cx-bw/2+2}" y="${y}" width="${bw-4}" height="${T+ph-y}" rx="2" fill="#35d0ff1f" stroke="#7df9ff" stroke-width="1.3" stroke-dasharray="3 2"/><text x="${cx}" y="${y-3}" font-size="8" font-weight="700" text-anchor="middle" fill="#7df9ff">${Math.round(v)}</text>`;
-    s+=`<text transform="translate(${cx+4},${T+ph+8}) rotate(-45)" text-anchor="end" font-size="${NM>16?6.5:7.5}" fill="${real?'currentColor':'#7df9ff'}">${MN[mm.m]} ${String(mm.y).slice(2)}</text>`; });
+  const P=meses.map((mm,k)=>{ const real=cub[k], v=real?tot[k]:pT[k]; return {cx:L+k*bw+bw/2,y:yv(v),v,real,mm,k}; });
+  P.forEach(p=>{ s+=`<line x1="${p.cx}" x2="${p.cx}" y1="${T}" y2="${T+ph}" stroke="#35d0ff" stroke-opacity=".12"/>`; });
+  [0.25,0.5,0.75].forEach(f=>{ s+=`<line x1="${L}" x2="${W-R}" y1="${T+ph*f}" y2="${T+ph*f}" stroke="#35d0ff" stroke-opacity=".10"/>`; });
+  const base=T+ph, all=P.map(p=>p.cx+','+p.y).join(' ');
+  s+=`<polygon points="${P[0].cx},${base} ${all} ${P[P.length-1].cx},${base}" fill="url(#ha)"/>`;
+  s+=`<polyline points="${all}" fill="none" stroke="#7df9ff" stroke-width="1.4" stroke-dasharray="4 3" stroke-opacity=".9"/>`;
+  const rp=P.filter(p=>p.real); // tramos reales: línea sólida y brillante
+  let seg=[]; const flush=()=>{ if(seg.length>1) s+=`<polyline points="${seg.map(p=>p.cx+','+p.y).join(' ')}" fill="none" stroke="#fff" stroke-width="2.2" filter="url(#hglow)"/>`; seg=[]; };
+  P.forEach(p=>{ if(p.real) seg.push(p); else flush(); }); flush();
+  P.forEach(p=>{ const lastP=p.real&&p.k===lastK&&parcial;
+    s+= p.real?`<circle cx="${p.cx}" cy="${p.y}" r="3.2" fill="${lastP?'#0a2352':'#fff'}" stroke="#35d0ff" stroke-width="1.6" filter="url(#hglow)"/>`:`<circle cx="${p.cx}" cy="${p.y}" r="2.6" fill="#0a2352" stroke="#7df9ff" stroke-width="1.3"/>`;
+    s+=`<text x="${p.cx}" y="${p.y-7}" font-size="8" font-weight="700" text-anchor="middle" fill="${p.real?'#fff':'#7df9ff'}">${p.real?p.v:Math.round(p.v)}</text>`;
+    s+=`<text transform="translate(${p.cx+4},${T+ph+8}) rotate(-45)" text-anchor="end" font-size="${NM>16?6.5:7.5}" fill="${p.real?'#bfe9ff':'#7df9ff'}">${MN[p.mm.m]} ${String(p.mm.y).slice(2)}</text>`; });
   s+='</svg>';
   const prox=lastK+1<NM?pT[lastK+1]:null;
-  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Proyección ${MN[M0[1]]} ${M0[0]} – jul 2027</b><div class="ev-int">${esc(nom)} · trabajos por mes (real y proyectado)</div></div>${hud(s,'DATA 02 · PROYECCIÓN',(MN[M0[1]]+' '+String(M0[0]).slice(2)+' – JUL 27').toUpperCase())}<div class="kpi-strip c3" style="margin-top:6px;">${kc(prox!=null?fnum(prox,0):'—','Trabajos próx. mes','kpi-orange')}${kc(fnum(totAnual,0),'Trabajos '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-blue')}${costo?kc(fm(facAnual),'Facturado '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-green',1):kc(fnum(totAnual/NM,1),'Promedio mensual','kpi-green')}</div><div class="ev-int" style="margin-top:4px;"><span style="color:#35d0ff;">■</span> real${parcial?' (celeste: mes en curso, incompleto)':''} · <span style="color:#7df9ff;">▭</span> proyectado (${fitN<3?'promedio':'tendencia lineal'} sobre ${fitN} mes(es) con datos completos). Los meses sin turnos cargados se estiman. El total suma lo real más lo proyectado. Es una estimación.</div></div>`;
+  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Proyección ${MN[M0[1]]} ${M0[0]} – jul 2027</b><div class="ev-int">${esc(nom)} · trabajos por mes (real y proyectado)</div></div>${hud(s,'DATA 02 · PROYECCIÓN',(MN[M0[1]]+' '+String(M0[0]).slice(2)+' – JUL 27').toUpperCase())}<div class="kpi-strip c3" style="margin-top:6px;">${kc(prox!=null?fnum(prox,0):'—','Trabajos próx. mes','kpi-orange')}${kc(fnum(totAnual,0),'Trabajos '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-blue')}${costo?kc(fm(facAnual),'Facturado '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-green',1):kc(fnum(totAnual/NM,1),'Promedio mensual','kpi-green')}</div><div class="ev-int" style="margin-top:4px;"><span style="color:#35d0ff;">●</span> real${parcial?' (el último punto: mes en curso, incompleto)':''} · <span style="color:#7df9ff;">○</span> proyectado (línea punteada) (${fitN<3?'promedio':'tendencia lineal'} sobre ${fitN} mes(es) con datos completos). Los meses sin turnos cargados se estiman. El total suma lo real más lo proyectado. Es una estimación.</div></div>`;
 }
 
 /* ─── INICIO: comparativo de supervisores ─── */
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v32</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v33</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -515,7 +532,7 @@ function vInicio(c){
     const u=mios.find(x=>x.id===pid)||mios[0], k=kpiTurno(u.id);
     h+=`<div class="fg" style="margin-bottom:8px;"><label class="fl">Período a ver</label><select class="fs" onchange="try{localStorage.setItem('pv_per_${slug(n)}',this.value)}catch(e){};render()">${mios.map((x,i)=>`<option value="${x.id}" ${x.id===u.id?'selected':''}>${fmtD(x.inicio)} al ${fmtD(x.fin)}${i===0?' (último)':''}</option>`).join('')}</select></div>`;
     h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>${u===mios[0]?'Último turno':'Turno'}</b> · ${fmtD(u.inicio)} al ${fmtD(u.fin)}</div><div class="plan-int">${mios.length} turno(s)</div></div></div>`+kpiBlock(k);
-    h+=`<div class="chart-row">${pareto(mios,n)}${proyeccion(mios,n)}</div>`;
+    h+=`<div class="chart-row">${pareto(mios,n)}${proyeccion(mios,n)}${gauge(n,u,k)}</div>`;
     if(mios.length>1){
       const ks=mios.map(t=>kpiTurno(t.id)); const av=f=>ks.reduce((s,x)=>s+f(x),0)/ks.length;
       h+=`<div class="note">Promedio por turno (${ks.length}): ${fnum(av(x=>x.total))} trabajos · ${fnum(av(x=>x.backlogs))} backlogs · ${fnum(av(x=>x.qcTotal))} insp. QC`+(ocultarCostos()?'':` · ${fm(av(x=>x.fact))} facturado`)+`</div>`;
@@ -1432,7 +1449,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v32</div>
+  <div class="note">Versión de la app: v33</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
