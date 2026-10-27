@@ -463,7 +463,7 @@ function pareto(mios,nom){
     const lb=k.replace(/^\d+\s*[-–]\s*/,''); s+=`<text transform="translate(${cx+3},${T+ph+8}) rotate(-45)" text-anchor="end" font-size="8.5" fill="currentColor">${esc(lb.length>16?lb.slice(0,15)+'…':lb)}</text>`; });
   s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${LC}" stroke-width="2.2"/>`+pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.8" fill="${LC}"/>`).join('');
   s+=`<text x="${L+4}" y="${yp(80)-3}" font-size="8.5" font-weight="700" fill="currentColor">Regla 80/20</text></svg>`;
-  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Pareto de trabajos por tipo de reparación</b><div class="ev-int">${esc(nom)} · todos los períodos (${mios.length}) · ${tot} trabajos</div></div><div style="background:linear-gradient(180deg,#e6f1fa 0%,#ffffff 70%);border:1px solid #c9dceb;border-radius:12px;padding:8px 6px 4px;box-shadow:0 2px 8px rgba(30,80,130,.15);">${s}</div><div class="ev-int" style="margin-top:6px;"><span style="color:${VC};">■</span> pocos vitales: ${nv} tipo(s) que explican el 80% (a la derecha) · <span style="color:${GC};">■</span> resto · <span style="color:${LC};">●</span> % acumulado. Barras de menor a mayor.</div></div>`;
+  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Pareto de trabajos por tipo de reparación</b><div class="ev-int">${esc(nom)} · todos los períodos (${mios.length}) · ${tot} trabajos</div></div><div style="background:radial-gradient(circle at 12% 18%,rgba(255,255,255,.75) 0 7%,transparent 8%),radial-gradient(circle at 88% 12%,rgba(255,255,255,.55) 0 9%,transparent 10%),radial-gradient(circle at 80% 85%,rgba(120,170,210,.45) 0 12%,transparent 13%),radial-gradient(circle at 8% 80%,rgba(140,175,205,.5) 0 10%,transparent 11%),linear-gradient(135deg,#aebfce 0%,#cfdce8 45%,#9db3c6 100%);border-radius:12px;padding:14px 14px 0;"><div style="background:#fff;border:6px solid #e9eef3;outline:1px solid #b9c6d2;border-radius:8px;padding:6px 6px 2px;box-shadow:0 6px 16px rgba(20,50,80,.35);">${s}</div><div style="width:34%;height:12px;margin:0 auto;background:linear-gradient(#d5dde5,#aab8c5);border-radius:0 0 6px 6px;"></div><div style="width:58%;height:7px;margin:0 auto;background:#8ea0b1;border-radius:6px 6px 0 0;"></div></div><div class="ev-int" style="margin-top:6px;"><span style="color:${VC};">■</span> pocos vitales: ${nv} tipo(s) que explican el 80% (a la derecha) · <span style="color:${GC};">■</span> resto · <span style="color:${LC};">●</span> % acumulado. Barras de menor a mayor.</div></div>`;
 }
 function proyeccion(mios,nom){
   const ids=new Set(mios.map(x=>x.id)); const trs=Object.values(S.trabajos).filter(x=>ids.has(x.turnoId)&&x.fecha);
@@ -502,7 +502,7 @@ function proyeccion(mios,nom){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v30</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v31</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -1427,7 +1427,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v30</div>
+  <div class="note">Versión de la app: v31</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
