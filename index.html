@@ -163,6 +163,8 @@ body[data-role="lectura"] .btn-add-nav, body[data-role="lectura"] .fab, body[dat
 .mc-day.sel:not(.today) { background:rgba(204,0,0,0.15); border:1.5px solid var(--red); border-radius:50%; width:30px; height:30px; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:auto; padding:0; color:var(--red); font-weight:700; }
 .cal-leg { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:10px; font-size:10.5px; color:var(--text3); }
 .cal-leg i.dot-red,.cal-leg i.dot-prev,.cal-leg i.dot-cumpl,.cal-leg i.dot-org{display:inline-block;border-radius:50%;} .cal-leg span { display:flex; align-items:center; gap:4px; } .cal-leg i { width:7px; height:7px; display:inline-block; }
+.chart-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:10px;align-items:start;margin-bottom:6px;}
+.chart-row .plan-card{margin:0;min-width:0;}
 </style>
 </head>
 <body>
@@ -451,7 +453,7 @@ function pareto(mios,nom){
   it=it.map(x=>[x[0],x[1],top.has(x[0])]).sort((a,b)=>a[1]-b[1]);
   const W=360,H=215,L=50,R=30,T=12,B=80, pw=W-L-R, ph=H-T-B, bw=pw/it.length, mx=Math.max(...it.map(x=>x[1])); let ac=0;
   const stp=Math.max(1,Math.ceil(mx/10)), mxa=stp*10; const yv=v=>T+ph-v/mxa*ph, yp=p=>T+ph-p/100*ph;
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:400px;height:auto;display:block;margin:0 auto;font-family:inherit;" role="img" aria-label="Pareto de trabajos por tipo de reparación de ${esc(nom)}">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:520px;height:auto;display:block;margin:0;font-family:inherit;" role="img" aria-label="Pareto de trabajos por tipo de reparación de ${esc(nom)}">`;
   for(let p=0;p<=100;p+=10){ const c80=p===80; s+=`<line x1="${L}" x2="${W-R}" y1="${yp(p)}" y2="${yp(p)}" stroke="currentColor" stroke-opacity="${c80?.55:.15}" ${c80?'stroke-dasharray="4 3"':''}/><text x="${W-R+3}" y="${yp(p)+3}" font-size="8" fill="currentColor" fill-opacity=".7">${p}%</text><text x="${L-4}" y="${yp(p)+3}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${p/10*stp}</text>`; }
 
   const pts=[]; it.forEach(([k,v,tp],i)=>{ const x=L+i*bw, y=yv(v); ac+=v; const cx=x+bw/2, cy=yp(ac/tot*100); pts.push([cx,cy]);
@@ -485,7 +487,7 @@ function proyeccion(mios,nom){
   const totAnual=Math.round(tot.reduce((s,v,k)=>s+(cub[k]?v:0),0)+pT.reduce((s,v)=>s+(v||0),0));
   const facAnual=fac.reduce((s,v,k)=>s+(cub[k]?v:0),0)+pF.reduce((s,v)=>s+(v||0),0);
   const W=360,H=140,L=30,R=8,T=14,B=38,pw=W-L-R,ph=H-T-B,bw=pw/NM, vals=meses.map((_,k)=>cub[k]?tot[k]:pT[k]); const mxv=Math.max(...vals,1)*1.15; const yv=v=>T+ph-v/mxv*ph;
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:400px;height:auto;display:block;margin:0 auto;font-family:inherit;" role="img" aria-label="Trabajos por mes y proyección de julio 2026 a julio 2027 de ${esc(nom)}"><line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" stroke="currentColor" stroke-opacity=".25"/><text x="${L-4}" y="${T+4}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${Math.round(mxv)}</text>`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:520px;height:auto;display:block;margin:0;font-family:inherit;" role="img" aria-label="Trabajos por mes y proyección de julio 2026 a julio 2027 de ${esc(nom)}"><line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" stroke="currentColor" stroke-opacity=".25"/><text x="${L-4}" y="${T+4}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".7">${Math.round(mxv)}</text>`;
   meses.forEach((mm,k)=>{ const cx=L+k*bw+bw/2, real=cub[k], v=real?tot[k]:pT[k], y=yv(v);
     s+= real?`<rect x="${cx-bw/2+2}" y="${y}" width="${bw-4}" height="${T+ph-y}" rx="2" fill="${k===lastK&&parcial?'#6fb3e0':'#2b8ccf'}"/><text x="${cx}" y="${y-3}" font-size="8" font-weight="700" text-anchor="middle" fill="currentColor">${v}</text>`
       :`<rect x="${cx-bw/2+2}" y="${y}" width="${bw-4}" height="${T+ph-y}" rx="2" fill="#f08a0022" stroke="#f08a00" stroke-width="1.5" stroke-dasharray="3 2"/><text x="${cx}" y="${y-3}" font-size="8" font-weight="700" text-anchor="middle" fill="#f08a00">${Math.round(v)}</text>`;
@@ -499,7 +501,7 @@ function proyeccion(mios,nom){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v26</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v27</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -507,7 +509,7 @@ function vInicio(c){
     const u=mios.find(x=>x.id===pid)||mios[0], k=kpiTurno(u.id);
     h+=`<div class="fg" style="margin-bottom:8px;"><label class="fl">Período a ver</label><select class="fs" onchange="try{localStorage.setItem('pv_per_${slug(n)}',this.value)}catch(e){};render()">${mios.map((x,i)=>`<option value="${x.id}" ${x.id===u.id?'selected':''}>${fmtD(x.inicio)} al ${fmtD(x.fin)}${i===0?' (último)':''}</option>`).join('')}</select></div>`;
     h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>${u===mios[0]?'Último turno':'Turno'}</b> · ${fmtD(u.inicio)} al ${fmtD(u.fin)}</div><div class="plan-int">${mios.length} turno(s)</div></div></div>`+kpiBlock(k);
-    h+=pareto(mios,n)+proyeccion(mios,n);
+    h+=`<div class="chart-row">${pareto(mios,n)}${proyeccion(mios,n)}</div>`;
     if(mios.length>1){
       const ks=mios.map(t=>kpiTurno(t.id)); const av=f=>ks.reduce((s,x)=>s+f(x),0)/ks.length;
       h+=`<div class="note">Promedio por turno (${ks.length}): ${fnum(av(x=>x.total))} trabajos · ${fnum(av(x=>x.backlogs))} backlogs · ${fnum(av(x=>x.qcTotal))} insp. QC`+(ocultarCostos()?'':` · ${fm(av(x=>x.fact))} facturado`)+`</div>`;
@@ -1424,7 +1426,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v26</div>
+  <div class="note">Versión de la app: v27</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
