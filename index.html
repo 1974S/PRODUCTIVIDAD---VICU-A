@@ -565,7 +565,7 @@ function proyeccion(mios,nom,etq){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v49</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v51</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -1393,18 +1393,18 @@ function stockInfData(){
 function buildStockReport(){
   const d=stockInfData(), M=cfg('moneda'), pf=n=>fm(n);
   const secs=[];
-  secs.push({h:'1. STOCK ACTUAL VALORADO',blocks:[
+  secs.push({h:'1. RESUMEN',blocks:[{table:{head:['Concepto','Unidades','Valor ('+M+')'],widths:[3,1,1.4],rows:[['Stock actual valorado',fnum(d.sT.u,0),pf(d.sT.v)],['Repuestos en tránsito',fnum(d.trT.u,0),pf(d.trT.v)],['Pedidos del mes en curso',fnum(d.pT.u,0),pf(d.pT.v)]]}},{p:'Los valores se calculan con la lista de precios o el stock valorado del mes de cada movimiento.'}]});
+  secs.push({h:'2. STOCK ACTUAL VALORADO',blocks:[
     d.stock.length?{table:{head:['Código','Repuesto','Stock','Valor unit. ('+M+')','Valor total ('+M+')'],widths:[1.3,4,0.7,1.2,1.3],small:true,rows:[...d.stock.map(o=>[o.cod,o.desc,fnum(o.stk,0),o.u>0?pf(o.u):'s/precio',pf(o.stkV)]),['','TOTAL STOCK VALORADO',fnum(d.sT.u,0),'',pf(d.sT.v)]]}}:{p:'No hay stock con cantidades cargado.'},
     {p:'Fuente de cantidades: '+d.fuente+'. '+d.stock.length+' repuestos con stock · '+fnum(d.sT.u,0)+' unidades · valor total '+pf(d.sT.v)+'.'+(d.sT.sin?' '+d.sT.sin+' repuesto(s) sin precio en la lista de precios o stock valorado (valen 0).':'')}]});
-  secs.push({h:'2. REPUESTOS EN TRÁNSITO VALORADOS',blocks:[
+  secs.push({h:'3. REPUESTOS EN TRÁNSITO VALORADOS',blocks:[
     d.trRows.length?{table:{head:['Remito','Fecha','Repuesto','Cant.','Valor unit. ('+M+')','Subtotal ('+M+')'],widths:[1.3,0.9,3.6,0.6,1.1,1.2],small:true,rows:[...d.trRows.map(r=>[r.e.remito||'s/n',fmtDC(r.e.fecha),(r.i.codigo?r.i.codigo+' · ':'')+r.i.desc,fnum(r.c,0),r.pu>0?pf(r.pu):'s/precio',pf(r.sub)]),['','','TOTAL EN TRÁNSITO',fnum(d.trT.u,0),'',pf(d.trT.v)]]}}:{p:'No hay envíos de repuestos en tránsito.'},
     d.trEnv.length?{table:{head:['Remito','Fecha','Destino','Unidades','Valor ('+M+')'],widths:[1.4,1,2,1,1.4],rows:[...d.trEnv.map(x=>[x.e.remito||'s/n',fmtDC(x.e.fecha),x.e.destino||'',fnum(x.u,0),pf(x.v)]),['TOTAL','','',fnum(d.trT.u,0),pf(d.trT.v)]]}}:{p:''},
     {p:'Total de repuestos enviados que están en tránsito: '+d.trEnv.length+' envío(s) · '+fnum(d.trT.u,0)+' unidades · '+pf(d.trT.v)+'.'+(d.trT.sin?' '+d.trT.sin+' línea(s) sin precio.':'')}]});
   const pb=[];
   d.bySup.forEach(x=>{ pb.push({p:x.s+': '+x.n+' pedido(s) · '+fnum(x.u,0)+' unidades · '+pf(x.v)+(x.sin?' ('+x.sin+' sin precio)':'')}); pb.push(x.rows.length?{table:{head:['Fecha','Unidad','OT','Repuesto','Cant.','Valor unit. ('+M+')','Subtotal ('+M+')'],widths:[0.9,0.9,0.7,3.2,0.6,1.1,1.2],small:true,rows:[...x.rows.map(r=>[fmtDC(r.x.fecha),r.x.patente||'',r.x.ot||'',r.x.desc,fnum(num(r.x.cant),0),r.pu>0?pf(r.pu):'s/precio',pf(r.sub)]),['','','','TOTAL '+x.s.split(' ').pop().toUpperCase(),fnum(x.u,0),'',pf(x.v)]]}}:{p:'Sin pedidos de repuestos en el mes en curso.'}); });
   pb.push({table:{head:['Supervisor','Pedidos','Unidades','Valor ('+M+')'],widths:[2,1,1,1.4],rows:[...d.bySup.map(x=>[x.s,x.n,fnum(x.u,0),pf(x.v)]),['TOTAL PEDIDOS DEL MES',d.pT.n,fnum(d.pT.u,0),pf(d.pT.v)]]}});
-  secs.push({h:'3. PEDIDOS DE REPUESTOS DEL MES EN CURSO POR SUPERVISOR',blocks:pb});
-  secs.push({h:'4. RESUMEN',blocks:[{table:{head:['Concepto','Unidades','Valor ('+M+')'],widths:[3,1,1.4],rows:[['Stock actual valorado',fnum(d.sT.u,0),pf(d.sT.v)],['Repuestos en tránsito',fnum(d.trT.u,0),pf(d.trT.v)],['Pedidos del mes en curso',fnum(d.pT.u,0),pf(d.pT.v)]]}},{p:'Los valores se calculan con la lista de precios o el stock valorado del mes de cada movimiento.'}]});
+  secs.push({h:'4. PEDIDOS DE REPUESTOS DEL MES EN CURSO POR SUPERVISOR',blocks:pb});
   return {file:'Informe_Stock_'+d.hoy,title:'INFORME DE STOCK DE REPUESTOS',subtitle:'Stock valorado, repuestos en tránsito y pedidos del mes',tema:'Repuestos del taller de livianos – Proyecto Vicuña',
     meta:metaBase([['Actividad','Control de stock de repuestos – Proyecto Vicuña'],['Sistema / Alcance','Stock actual, repuestos en tránsito y pedidos del mes en curso por supervisor'],['Fuente del stock',d.fuente],['Mes en curso',d.mes],['Moneda',M]]),secs};
 }
@@ -1977,8 +1977,19 @@ function buildCompReport(){
       {h:'2. PROMEDIO POR TURNO Y SUPERVISOR',blocks:[{table:{head:['Supervisor','Turnos','Trab.','Prog.','Imprev.','Backl.','Insp. QC','Facturado ('+M+')'],widths:[1.2,0.7,0.8,0.8,0.8,0.8,0.9,1.4],rows:prom}}]},
       {h:'3. OBSERVACIONES',blocks:[{p:'[Completar manualmente]'}]}]};
 }
+async function ensureLib(ok,urls){
+  if(ok()) return true;
+  for(const u of urls){ try{ await loadScript(u); if(ok()) return true; }catch(e){} }
+  return ok();
+}
+const LIBS={
+  docx:()=>ensureLib(()=>!!window.docx,['https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.umd.min.js','https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js','https://unpkg.com/docx@8.5.0/build/index.umd.js']),
+  pdf:async()=>{ const a=await ensureLib(()=>!!window.jspdf,['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js','https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js','https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js']); if(!a) return false; return ensureLib(()=>!!(window.jspdf&&new window.jspdf.jsPDF().autoTable),['https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js','https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js','https://unpkg.com/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js']); },
+  xlsx:()=>ensureLib(()=>!!window.XLSX,['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js','https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js','https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js'])
+};
 async function exportar(que,fmt){
   try{
+    if(fmt==='docx'||fmt==='pdf'||fmt==='xlsx'){ toast('Preparando el informe…'); if(!(await LIBS[fmt]())) throw new Error('No se pudo cargar la librería de '+(fmt==='docx'?'Word':fmt==='pdf'?'PDF':'Excel')+'. Revisá la conexión a internet y volvé a intentar.'); }
     if(que==='turno'&&!turnoSel()){ toast('No hay turno seleccionado'); return; }
     if(que==='stock'&&ocultarCostos()){ toast('Sin permiso para ver valores'); return; }
     if(que==='stock'&&fmt==='xlsx') return stockInfXlsx();
@@ -2065,7 +2076,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v49</div>
+  <div class="note">Versión de la app: v51</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
