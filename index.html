@@ -338,6 +338,7 @@ function attachFirebase(){
         S[c]=remote; persist(); softRender();
       },err=>{ fbEstado='Sin permiso: '+err.message; });
     });
+    db.ref('productividad/precios').on('value',snap=>{ const v=snap.val(); if(v){ PRE=v; savePre(); valorarRepuestos(); softRender(); } });
     db.ref('productividad/config').on('value',snap=>{ const v=snap.val(); if(v){ S.config=v; persist(); softRender(); } });
     db.ref('ordenes_trabajo').on('value',snap=>{ otCargar(snap.val()); delete fbErr.ot; if(curTab==='flota') softRender(); agendarSync(); },e=>{ fbErr.ot=e.message; softRender(); });
     db.ref('reparaciones_reales').on('value',snap=>{ reparReales=snap.val()||{}; autoOK.rep=true; delete fbErr.rep; agendarSync(); },e=>{ fbErr.rep=e.message; autoOK.rep=true; agendarSync(); });
@@ -383,7 +384,7 @@ function turnoSel(){ if(selT&&S.turnos[selT]) return S.turnos[selT]; const t=tur
 function tLabel(t){ return t.supervisor.split(' ').pop()+' · '+fmtDC(t.inicio)+' – '+fmtD(t.fin); }
 function enTurno(t,iso){ return iso>=t.inicio&&iso<=t.fin; }
 function recs(col,tid){ return Object.values(S[col]).filter(x=>x.turnoId===tid).sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')); }
-function repFact(x){ if(x.repFact!=null&&x.repFact!=='') return num(x.repFact); return (x.repuestos||[]).reduce((s,r)=>s+num(r.cant)*num(r.precio),0); }
+function repFact(x){ if(x.repFact!=null&&x.repFact!==''&&num(x.repFact)>0) return num(x.repFact); return (x.repuestos||[]).reduce((s,r)=>s+num(r.cant)*num(r.precio),0); }
 
 function kpiTurno(tid){
   const tr=recs('trabajos',tid), bl=recs('backlogs',tid), qc=recs('qc',tid);
@@ -562,7 +563,7 @@ function proyeccion(mios,nom){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v36</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v37</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -718,7 +719,7 @@ function vFlota(c){
       h+=`<div class="btn-row wr" style="margin-top:10px;"><button class="btn-secondary" onclick="selTodasOT()">Seleccionar todas</button><button class="btn-primary" onclick="importarOT()">Importar seleccionadas</button></div><div class="note">Importa a "Trabajos": PM = programado; el resto, imprevisto. Revisá el tipo de reparación después, se clasifica por palabras clave.</div>`;
     }
   }
-  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('📥','Importar órdenes de trabajo valorizadas (PDF)','.pdf',1)+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+`</div>`;
+  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('📥','Importar órdenes de trabajo valorizadas (PDF)','.pdf',1)+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+btnCarga('💲','Cargar lista de precios / stock valorado (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+vPreciosEstado()+`</div>`;
   h+=`<div class="sec-hdr">Carga manual desde Excel / CSV</div><div class="wr">`+vImport()+`</div>`;
   c.innerHTML=h;
 }
@@ -898,6 +899,7 @@ async function cargarUno(file){
       if(!esRoster(aoa)){
         const p=parseMensualExcel(wb);
         if(p.bk.length||p.pr.length){ rep=Object.assign({kind:'mensual',name:file.name},p); render(); return; }
+        { const hi=preHeader(aoa); if(hi>=0){ const head=aoa[hi].map(x=>String(x||'').trim()); rep={kind:'precios',name:file.name,pdf:false,head,rows:aoa.slice(hi+1).filter(r=>r.some(v=>v!=='')),map:preMapAuto(head),mes:mesActual(),mon:cfg('moneda')==='USD'?'USD':'ARS',tc:null,tipo:preMapAuto(head).cant>=0&&preMapAuto(head).total>=0?'stock':'lista'}; if(preItemsExcel(rep).length){ render(); return; } rep=null; } }
         rep={kind:'aviso',name:file.name,msg:'Este Excel no es un "Cambio de turno fin de roster". Si es una planilla propia de trabajos, backlogs o inspecciones, usá la carga genérica de más abajo.'}; render(); return; }
       rosterPreview(file.name,aoa);
     }else if(ext==='docx'){
@@ -916,6 +918,7 @@ async function cargarUno(file){
         if(!ots.length) rep={kind:'aviso',name:file.name,msg:'Se reconoció una hoja de trabajos y costos, pero no se pudo leer ninguna orden.'};
         else if(rep&&rep.kind==='hojas'){ const k=new Set(rep.ots.map(o=>o.key)); ots.forEach(o=>{ if(!k.has(o.key)) rep.ots.push(o); }); rep.names.push(file.name); }
         else rep={kind:'hojas',names:[file.name],ots,crear:false}; }
+      else if(!/indicadores/i.test(pages.map(p=>p.map(i=>i.s).join(' ')).join(' ').slice(0,3000))&&(()=>{ const txt=pages.map(p=>p.map(i=>i.s).join(' ')).join(' '); const tipo=/stock|existencia|valorizad/i.test(txt)?'stock':'lista'; const items=prePdfItems(pages,tipo); if(items.length>=3){ rep={kind:'precios',name:file.name,pdf:true,pages,items,mes:mesActual(),mon:cfg('moneda')==='USD'?'USD':'ARS',tc:null,tipo}; return true; } return false; })()){ }
       else pdfPreview(file.name,pages);
     }else{ rep={kind:'aviso',name:file.name,msg:'Formato no admitido. Se pueden cargar .xlsx (cambio de turno), .docx y .pdf (informe de indicadores).'}; }
   }catch(e){ rep=null; toast('No se pudo leer: '+e.message); }
@@ -956,6 +959,7 @@ function vInforme(){
   }
   if(rep.kind==='hojas') return vHojas();
   if(rep.kind==='mensual') return vMensual();
+  if(rep.kind==='precios') return vPrecios();
   if(rep.kind==='pdf'){
     const R=rep; const pairs=emparejar(pdfCandidatos(),R.ots);
     let h=`<div class="alert alert-info"><b>Informe de indicadores · ${esc(R.name)}</b><br>${esc(R.mes||'')} · ${R.ots.length} OT en el detalle · ${R.hh.length} registro(s) de horas hombre por roster</div>`;
@@ -1176,6 +1180,7 @@ function sincronizarAuto(manual){
     if(esBK&&!bkManual&&!S.backlogs[bid]&&!descartado(bid)){ put('backlogs',{id:bid,turnoId:t.turnoId,fecha:t.fecha,unidad:t.unidad,ot:t.ot||'',descripcion:(t.descripcion||'').slice(0,300),obs:'Estimado: el texto indica un trabajo pendiente o detectado antes',origen:'auto',creado:Date.now()}); nB++; }
     if((!esBK||bkManual)&&S.backlogs[bid]&&S.backlogs[bid].origen==='auto') del('backlogs',bid);
   });
+  try{ valorarRepuestos(); }catch(e){}
   syncInfo={t:nT,w:nW,e:nE,q:nQ,b:nB,roster:metas.length,reps:Object.keys(reparReales||{}).length,ot:flotaOT.length,hora:new Date()};
   if(!selT&&Object.keys(S.turnos).length){ const u=turnosOrd()[0]; if(u) selT=u.id; }
   if(manual) toast('Sincronizado: '+nT+' turno(s), '+nW+' trabajo(s), '+nE+' con OT de Flota'+(nQ?', '+nQ+' control(es) de calidad':'')+(nB?', '+nB+' backlog(s) estimados':''));
@@ -1331,6 +1336,7 @@ function aplicarMensual(){
     rs.push({codigo:'',desc:x.desc,cant:x.cant,precio:null}); t.repuestos=rs; if(!t.ot&&x.ot) t.ot=x.ot; put('trabajos',t); np++; });
   // si el turno tiene backlogs cargados a mano, se descartan los estimados
   Object.values(S.backlogs).filter(b=>b.origen==='auto').forEach(b=>{ if(Object.values(S.backlogs).some(o=>o.turnoId===b.turnoId&&o.origen==='pdf')) del('backlogs',b.id); });
+  try{ valorarRepuestos(); }catch(e){}
   rep=null; toast(nb+' backlog(s) y '+np+' pedido(s) de repuestos cargados'+(ns?' · '+ns+' pedido(s) sin trabajo asociado':'')); render();
 }
 
@@ -1360,6 +1366,106 @@ function parseMensualExcel(wb){
     });
   });
   return {mes:'',bk,pr};
+}
+
+/* ═══════════ LISTA DE PRECIOS Y STOCK VALORADO (valoración de repuestos) ═══════════ */
+let PRE={}; try{ PRE=JSON.parse(localStorage.getItem('pv_precios')||'{}')||{}; }catch(e){ PRE={}; }
+function savePre(){ try{ localStorage.setItem('pv_precios',JSON.stringify(PRE)); }catch(e){} }
+function putPre(){ if(soloLectura()) return; savePre(); if(db&&fbOK) db.ref('productividad/precios').set(clean(PRE)).catch(()=>{}); }
+function numAR(v){
+  if(typeof v==='number') return isFinite(v)?v:null;
+  let s=String(v==null?'':v).replace(/U\$S|USD|US\$|\$|ARS|\s/gi,''); if(!/\d/.test(s)) return null; s=s.replace(/[^\d.,\-]/g,''); if(!s||s==='-') return null;
+  const c=s.lastIndexOf(','), d=s.lastIndexOf('.');
+  if(c>=0&&d>=0) s=c>d?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');
+  else if(c>=0) s=/^-?\d{1,3}(,\d{3})+$/.test(s)?s.replace(/,/g,''):s.replace(',','.');
+  else if(d>=0&&/^-?\d{1,3}(\.\d{3})+$/.test(s)) s=s.replace(/\./g,'');
+  const n=parseFloat(s); return isFinite(n)?n:null;
+}
+const nkey=s=>norm(String(s||'')).replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+function esPrecioExcel(aoa){ return preHeader(aoa)>=0; }
+function preHeader(aoa){
+  for(let i=0;i<Math.min(aoa.length,30);i++){ const h=aoa[i].map(norm); const d=h.some(x=>/descrip|articulo|producto|repuesto|detalle|material/.test(x)), p=h.some(x=>/precio|costo|valor|importe|p ?unit|\bpvp\b/.test(x)); const f=h.some(x=>x.includes('fecha'))&&h.some(x=>/unidad|patente|dominio/.test(x)); if(d&&p&&!f) return i; }
+  return -1;
+}
+function preMapAuto(head){
+  const h=head.map(norm), f=re=>h.findIndex(x=>re.test(x));
+  return {cod:f(/^(cod|codigo|sku|art|n ?parte|nro parte|part ?n)/),desc:f(/descrip|articulo|producto|repuesto|detalle|material/),precio:f(/p ?unit|precio unit|precio|costo unit|costo|pvp|valor unit/),cant:f(/stock|cant|exist/),total:f(/total|valor stock|valorizado|importe|subtotal/)};
+}
+function preItemsExcel(R){
+  const m=R.map, out=[];
+  R.rows.forEach(r=>{ const d=m.desc>=0?String(r[m.desc]||'').trim():''; if(!d) return;
+    let p=m.precio>=0?numAR(r[m.precio]):null; const q=m.cant>=0?numAR(r[m.cant]):null, t=m.total>=0?numAR(r[m.total]):null;
+    if((p==null||p===0)&&q&&t) p=t/q; if(p==null||p<=0) return;
+    out.push({c:m.cod>=0?String(r[m.cod]||'').trim():'',d,p:Math.round(p*10000)/10000}); });
+  return out;
+}
+function prePdfItems(pages,tipo){
+  const out=[];
+  pages.forEach(pg=>pdfLineas(pg).forEach(l=>{
+    const tk=l.split(' '); const nums=[]; let i=tk.length;
+    while(i>0&&nums.length<3){ const x=tk[i-1]; if(/^(U\$S|USD|\$)$/i.test(x)){ i--; continue; } if(/^-?[\d.,]+$/.test(x.replace(/^(U\$S|USD|\$)/i,''))&&numAR(x)!=null){ nums.unshift(numAR(x)); i--; } else break; }
+    if(!nums.length||i<1) return;
+    let desc=tk.slice(0,i).join(' '), cod=''; const m=desc.match(/^([A-Z0-9][A-Z0-9\-\/.]{2,})\s+(.{3,})$/); if(m&&/\d/.test(m[1])){ cod=m[1]; desc=m[2]; }
+    if(!/[A-Za-zÁÉÍÓÚáéíóú]{3}/.test(desc)||/^(total|subtotal|pagina|p[aá]g|fecha|stock valorizado|lista de precios)/i.test(desc)) return;
+    let p=null; const n=nums.length;
+    if(tipo==='stock'){ if(n===3){ const [q,u,t]=nums; p=Math.abs(q*u-t)<=0.02*Math.abs(t)+0.05?u:(q?t/q:null); } else if(n===2){ const [q,t]=nums; p=(q>0&&t>q)?t/q:t; } else p=nums[0]; }
+    else p=nums[n-1];
+    if(p==null||!(p>0)) return; out.push({c:cod,d:desc,p:Math.round(p*10000)/10000}); }));
+  return out;
+}
+function preKit(o){ return o; }
+function mesActual(){ return new Date().toISOString().slice(0,7); }
+function vPrecios(){
+  const R=rep, items=R.pdf?R.items:preItemsExcel(R); R._n=items.length;
+  let h=`<div class="alert alert-info"><b>Precios · ${esc(R.name)}</b><br>${items.length} artículo(s) con precio detectados.</div>`;
+  h+=`<div class="frow2"><div class="fg"><label class="fl">Mes de la lista</label><input class="fi" type="month" value="${R.mes}" onchange="rep.mes=this.value"></div><div class="fg"><label class="fl">Tipo de archivo</label><select class="fs" onchange="rep.tipo=this.value;if(rep.pdf)rep.items=prePdfItems(rep.pages,rep.tipo);render()"><option value="lista" ${R.tipo==='lista'?'selected':''}>Lista de precios</option><option value="stock" ${R.tipo==='stock'?'selected':''}>Stock valorado</option></select></div></div>`;
+  h+=`<div class="frow2"><div class="fg"><label class="fl">Moneda de los precios</label><select class="fs" onchange="rep.mon=this.value;render()"><option value="USD" ${R.mon==='USD'?'selected':''}>Dólares (U$S)</option><option value="ARS" ${R.mon==='ARS'?'selected':''}>Pesos ($)</option></select></div><div class="fg"><label class="fl">Tipo de cambio (pesos por U$S)</label><input class="fi" type="number" step="any" inputmode="decimal" placeholder="solo si cambia de moneda" value="${R.tc||''}" onchange="rep.tc=num(this.value)"></div></div>`;
+  if(!R.pdf){ const lab={cod:'Código (opcional)',desc:'Descripción',precio:'Precio unitario',cant:'Cantidad en stock (opcional)',total:'Valor total del stock (opcional)'};
+    Object.keys(lab).forEach(k=>{ h+=`<div class="fg" style="margin-bottom:8px;"><label class="fl">${lab[k]}</label><select class="fs" onchange="rep.map['${k}']=+this.value;render()"><option value="-1">— no usar —</option>${R.head.map((x,i)=>`<option value="${i}" ${R.map[k]===i?'selected':''}>${esc(x||('Columna '+(i+1)))}</option>`).join('')}</select></div>`; }); }
+  h+=`<div class="ev-list">${items.slice(0,8).map(x=>`<div class="ev-card"><div class="ev-stripe sc-pm3"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(x.d)}</div><div class="ev-date">${x.p.toLocaleString('es-AR')} ${R.mon==='USD'?'U$S':'$'}</div></div>${x.c?`<div class="ev-obs">Cód. ${esc(x.c)}</div>`:''}</div></div>`).join('')}</div><div class="note">Se muestran los primeros 8. Verificá que descripción y precio sean correctos.</div>`;
+  h+=`<div class="btn-row wr" style="margin-top:10px;"><button class="btn-secondary" onclick="rep=null;render()">Cancelar</button><button class="btn-primary" onclick="aplicarPrecios()">Guardar precios</button></div>`;
+  return h;
+}
+function aplicarPrecios(){
+  const R=rep; if(!R||R.kind!=='precios') return; const items=R.pdf?R.items:preItemsExcel(R);
+  if(!items.length){ toast('No hay artículos con precio'); return; }
+  const mes=R.mes||mesActual(); const P=PRE[mes]||{mes,items:[]}; const idx={}; (P.items||[]).forEach((x,k)=>idx[(x.c?'c:'+nkey(x.c):'d:'+nkey(x.d))]=k);
+  const arr=(P.items||[]).slice();
+  items.forEach(x=>{ const it={c:x.c,d:x.d,p:x.p,m:R.mon,tc:R.tc||null}; const k=x.c?'c:'+nkey(x.c):'d:'+nkey(x.d); if(k in idx) arr[idx[k]]=it; else { idx[k]=arr.length; arr.push(it); } });
+  PRE[mes]={mes,items:arr,archivos:[...(P.archivos||[]),R.name].slice(-6),cargado:Date.now()}; putPre();
+  const n=valorarRepuestos(); rep=null; toast(items.length+' precios guardados · '+n+' trabajo(s) valorados'); render();
+}
+function delPrecioMes(m){ if(!confirm('¿Eliminar la lista de '+m+'?')) return; delete PRE[m]; putPre(); valorarRepuestos(); render(); }
+function precioMoneda(it){ const mon=cfg('moneda')==='USD'?'USD':'ARS'; if(it.m===mon) return it.p; if(!it.tc) return null; return it.m==='USD'?it.p*it.tc:it.p/it.tc; }
+function catalogoPara(fecha){ const m=(fecha||'').slice(0,7); const ks=Object.keys(PRE).sort(); if(!ks.length) return null; let k=ks.filter(x=>x<=m).pop()||ks[0]; return PRE[k]; }
+const _cache={};
+function preIndex(P){ if(_cache.mes===P.mes&&_cache.n===P.items.length&&_cache.t===P.cargado) return _cache.ix; const ix={c:{},d:{},tk:[]}; P.items.forEach(it=>{ if(it.c) ix.c[nkey(it.c)]=it; ix.d[nkey(it.d)]=it; ix.tk.push([new Set(nkey(it.d).split(' ').filter(w=>w.length>2)),it]); }); Object.assign(_cache,{mes:P.mes,n:P.items.length,t:P.cargado,ix}); return ix; }
+function precioDe(r,fecha){
+  const P=catalogoPara(fecha); if(!P||!P.items.length) return null; const ix=preIndex(P);
+  let it=(r.codigo&&ix.c[nkey(r.codigo)])||ix.d[nkey(r.desc)];
+  if(!it){ const w=new Set(nkey(r.desc).split(' ').filter(x=>x.length>2)); if(w.size){ let best=0; ix.tk.forEach(([s,i])=>{ let c=0; w.forEach(x=>{ if(s.has(x)) c++; }); const j=c/(w.size+s.size-c); if(j>best){ best=j; it=i; } }); if(best<0.6) it=null; } }
+  return it?precioMoneda(it):null;
+}
+function kitPM(){ return String(cfg('kitPM')||'').split(/[;\n]+/).map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/^(\d+(?:[.,]\d+)?)\s*x?\s+(.+)$/i); return m?{cant:num(m[1]),desc:m[2].trim()}:{cant:1,desc:s}; }); }
+// completa el precio de los repuestos usados (y arma el kit de los PM 5.000 km que no traen repuestos)
+function valorarRepuestos(){
+  if(soloLectura()) return 0; let n=0; const kit=kitPM();
+  Object.values(S.trabajos).forEach(x=>{
+    let rs=(x.repuestos||[]).slice(), ch=false;
+    if(kit.length&&/5\.?000/.test(x.reparacion||'')&&(!rs.length||rs.every(r=>r.kit))){ const k=kit.map(i=>({codigo:'',desc:i.desc,cant:i.cant,precio:null,kit:true})); if(JSON.stringify(rs.map(r=>[r.desc,r.cant]))!==JSON.stringify(k.map(r=>[r.desc,r.cant]))){ rs=k; ch=true; } }
+    rs=rs.map(r=>{ if(num(r.precio)>0&&!r.autoPrecio) return r; const p=precioDe(r,x.fecha); if(p!=null&&p>0&&num(r.precio)!==Math.round(p*10000)/10000){ ch=true; return Object.assign({},r,{precio:Math.round(p*10000)/10000,autoPrecio:true}); } return r; });
+    if(ch){ x.repuestos=rs; put('trabajos',x); n++; }
+  });
+  return n;
+}
+function vPreciosEstado(){
+  const ks=Object.keys(PRE).sort().reverse();
+  let h=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>Precios cargados</b>${ks.length?'':'<div class="ev-int">Todavía no hay lista de precios ni stock valorado.</div>'}</div></div>`;
+  ks.forEach(m=>{ const P=PRE[m]; h+=`<div class="plan-row"><div class="plan-sys">${m}<div class="ev-int">${P.items.length} artículos · ${esc((P.archivos||[]).join(', '))}</div></div><button class="btn-secondary btn-sm" onclick="delPrecioMes('${m}')">Quitar</button></div>`; });
+  const kit=kitPM();
+  h+=`<div class="plan-note">Los repuestos usados se valorizan con la lista del mes del trabajo (o la más reciente anterior). Coincide por código o por descripción.</div></div>`;
+  h+=`<div class="fg"><label class="fl">Kit de repuestos del PM 5.000 km (se usa cuando la OT no trae repuestos)</label><textarea class="fta" style="min-height:90px;" placeholder="1x Filtro de aceite&#10;1x Filtro de aire&#10;4x Litro de aceite 15W40" onchange="S.config.kitPM=this.value;putCfg();valorarRepuestos();render()">${esc(cfg('kitPM')||'')}</textarea></div><div class="note">Una línea por repuesto: cantidad x descripción (igual a como figura en la lista de precios). ${kit.length?kit.length+' ítem(s) configurados.':''}</div>`;
+  return h;
 }
 
 /* ═══════════ INFORMES (formato Freddy) ═══════════ */
@@ -1487,7 +1593,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v36</div>
+  <div class="note">Versión de la app: v37</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
