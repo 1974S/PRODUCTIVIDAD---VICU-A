@@ -565,7 +565,7 @@ function proyeccion(mios,nom,etq){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v54</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v55</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -1195,13 +1195,20 @@ async function ocrRemito(file){
     let best=0,bs=await score(c);
     if(bs<3){ for(const d of [90,270,180]){ const s=await score(cnvRot(c,d)); if(s>bs){ bs=s; best=d; } if(s>=5) break; } }
     if(best) c=cnvRot(c,best);
-    return (await w.recognize(c)).data.text;
+    let txt=(await w.recognize(c)).data.text;
+    if(!parseRemito(txt).remito){ // segunda pasada: solo el recuadro superior derecho, ampliado
+      for(const [x0,y0,w0,h0] of [[0.45,0,0.55,0.3],[0.4,0,0.6,0.4]]){ const cc=document.createElement('canvas'); const sw=Math.round(c.width*w0), sh=Math.round(c.height*h0); const k=Math.min(2.5,2400/sw); cc.width=Math.round(sw*k); cc.height=Math.round(sh*k); const g=cc.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,cc.width,cc.height); g.drawImage(c,Math.round(c.width*x0),Math.round(c.height*y0),sw,sh,0,0,cc.width,cc.height);
+        const t2=(await w.recognize(cc)).data.text; txt+='\n'+t2; if(parseRemito(txt).remito) break; }
+    }
+    return txt;
   } finally { try{ await w.terminate(); }catch(e){} }
 }
 function parseRemito(tx){
   const R={remito:'',comp:'',fecha:'',destino:'',obs:'',items:[]}; const L=String(tx||'').split(/\r?\n/).map(s=>s.replace(/\s+$/,''));
   const all=L.join('\n'); let m;
-  if(m=all.match(/(\d{4})\s*[-–— ]\s*(\d{8})/)) R.remito=m[1]+'-'+m[2];
+  if(m=all.match(/REMITO[^\d]{0,25}(\d{4})[^\d]{0,5}(\d{8})/i)||all.match(/(\d{4})\s*[-–—.\s]\s*(\d{8})(?!\d)/)) R.remito=m[1]+'-'+m[2];
+  else if(m=all.match(/REMITO[^\d]{0,25}(\d{12})(?!\d)/i)) R.remito=m[1].slice(0,4)+'-'+m[1].slice(4);
+  else if(m=all.match(/N[°º]\s*:?\s*(\d{8})(?!\d)/i)) R.remito='0001-'+m[1];
   if(m=all.match(/Comp\.?[^0-9\n]{0,8}(\d{6,9})/i)) R.comp=m[1];
   if(m=all.match(/Fecha:?\s*(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{2,4})/i)){ let y=m[3]; if(y.length===2) y='20'+y; R.fecha=y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'); }
   if(m=all.match(/Destino:?[ \t]*([^\n]+)/i)) R.destino=m[1].replace(/[^\wÁÉÍÓÚÑáéíóúñ .\-]/g,'').trim();
@@ -1248,6 +1255,7 @@ function vEnvio(){
   let h=`<div class="alert alert-info"><b>Envío de repuestos</b>${R.archivo?' · '+esc(R.archivo):''}<br>${R.ocr?'Lectura automática del remito: revisá cada línea (el reconocimiento de texto puede equivocarse en códigos y cantidades) y corregí antes de guardar.':'Carga manual.'}</div>`;
   h+=`<div class="frow2"><div class="fg"><label class="fl">N° de remito</label><input class="fi" value="${esc(R.remito)}" placeholder="0001-00011206" onchange="envioHead('remito',this.value)"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" type="date" value="${esc(R.fecha)}" onchange="envioHead('fecha',this.value)"></div></div>`;
   h+=`<div class="frow2"><div class="fg"><label class="fl">Destino</label><input class="fi" list="envDest" value="${esc(R.destino)}" onchange="envioHead('destino',this.value)"><datalist id="envDest"><option value="VICUÑA MINA"><option value="MINA VELADERO"><option value="SEDE SAN JUAN"></datalist></div><div class="fg"><label class="fl">Observaciones / pedidos</label><input class="fi" value="${esc(R.obs)}" onchange="envioHead('obs',this.value)"></div></div>`;
+  if(!String(R.remito||'').trim()) h+=`<div class="alert alert-info"><b>Falta el N° de remito.</b> No se pudo leer de la imagen: copialo del remito (arriba a la derecha, formato 0001-00011206) en el primer campo.</div>`;
   if(ya) h+=`<div class="note"><b>Ya hay un envío con ese N° de remito: se reemplaza.</b></div>`;
   h+=kitDatalistCat();
   R.items.forEach((x,i)=>{ const c=catItem(x,R.fecha), p=precioDe(x,R.fecha); h+=`<div class="plan-card" style="display:block;margin-bottom:6px;"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;"><div style="width:130px;"><label class="fl">Código</label><input class="fi" value="${esc(x.codigo)}" onchange="envioEdit(${i},'codigo',this.value)"></div><div style="flex:1;min-width:200px;"><label class="fl">Descripción</label><input class="fi" list="kitDL" value="${esc(x.desc)}" onchange="envioEdit(${i},'desc',this.value.replace(/^.+? · /,''))"></div><div style="width:70px;"><label class="fl">Cant.</label><input class="fi" type="number" step="any" inputmode="decimal" value="${esc(x.cant)}" onchange="envioEdit(${i},'cant',this.value)"></div><button class="btn-secondary btn-sm" onclick="rep.items.splice(${i},1);render()">Quitar</button></div><div class="ev-int">${x.sug?`¿Será <b>${esc(x.sug.codigo)} · ${esc(x.sug.desc)}</b>? <a href="#" onclick="envioSug(${i});return false;">usar</a> · `:''}${oc?'':(p?'Valor unit. '+fm(p)+' · subtotal '+fm(p*num(x.cant)):'Sin precio en lista / stock')}${c&&c.exacto?' · ✔ código en catálogo':''}</div></div>`; });
@@ -1261,6 +1269,7 @@ function kitDatalistCat(){ return `<datalist id="kitDL">${kitCatalogo().map(s=>`
 function aplicarEnvio(){
   const R=rep; if(!R||R.kind!=='envio') return; const items=R.items.filter(i=>(i.desc||i.codigo)&&num(i.cant)>0).map(i=>({codigo:i.codigo||'',desc:i.desc||i.codigo,cant:num(i.cant)}));
   if(!items.length){ toast('Agregá al menos un repuesto'); return; } if(!R.fecha){ toast('Completá la fecha'); return; }
+  if(!String(R.remito||'').trim()){ toast('Completá el N° de remito (figura arriba a la derecha del remito)'); return; }
   put('envios',{id:R.id,estado:(S.envios[R.id]&&S.envios[R.id].estado)||'transito',remito:R.remito,comp:R.comp||'',fecha:R.fecha,destino:R.destino,obs:R.obs,items,archivo:R.archivo||'',creado:Date.now()});
   rep=null; toast('Envío guardado: '+items.length+' línea(s)'); render();
 }
@@ -2192,7 +2201,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v54</div>
+  <div class="note">Versión de la app: v55</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
