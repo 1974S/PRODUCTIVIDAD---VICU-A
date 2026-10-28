@@ -493,7 +493,7 @@ function gauge(nom,u,k){
   s+=`</g></svg>`;
   return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Programado vs imprevisto</b><div class="ev-int">${esc(nom)} · período ${fmtD(u.inicio)} al ${fmtD(u.fin)}</div></div>${hud(s,'DATA 03 · MIX',k.total+' TRABAJOS')}<div class="kpi-strip c3" style="margin-top:6px;">${kc(k.prog,'Programados','kpi-green')}${kc(k.imprev,'Imprevistos','kpi-orange')}${kc(fnum(k.pProg,0)+'%','% programado','kpi-blue')}</div></div>`;
 }
-function pareto(mios,nom){
+function pareto(mios,nom,etq){
   const ag={}; mios.forEach(x=>{ const k=kpiTurno(x.id); Object.keys(k.porTipo).forEach(tp=>{ ag[tp]=(ag[tp]||0)+k.porTipo[tp].p+k.porTipo[tp].i; }); });
   let it=Object.keys(ag).map(k=>[k,ag[k]]).sort((a,b)=>b[1]-a[1]); const tot=it.reduce((s,x)=>s+x[1],0);
   if(!tot) return '';
@@ -515,9 +515,9 @@ function pareto(mios,nom){
     const lb=k.replace(/^\d+\s*[-–]\s*/,''); s+=`<text transform="translate(${cx+3},${T+ph+8}) rotate(-45)" text-anchor="end" font-size="8.5" fill="currentColor">${esc(lb.length>16?lb.slice(0,15)+'…':lb)}</text>`; });
   s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${LC}" stroke-width="2.2" filter="url(#hglow)"/>`+pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.8" fill="${LC}"/>`).join('');
   s+=`<text x="${L+4}" y="${yp(80)-3}" font-size="8.5" font-weight="700" fill="currentColor">Regla 80/20</text></svg>`;
-  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Pareto de trabajos por tipo de reparación</b><div class="ev-int">${esc(nom)} · todos los períodos (${mios.length}) · ${tot} trabajos</div></div>${hud(s,'DATA 01 · PARETO',tot+' TRABAJOS')}<div class="ev-int" style="margin-top:6px;"><span style="color:${VC};">■</span> pocos vitales: ${nv} tipo(s) que explican el 80% (a la derecha) · <span style="color:${GC};">■</span> resto · <span style="color:${LC};">●</span> % acumulado. Barras de menor a mayor.</div></div>`;
+  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Pareto de trabajos por tipo de reparación</b><div class="ev-int">${esc(nom)} · ${esc(etq||('todos los períodos ('+mios.length+')'))} · ${tot} trabajos</div></div>${hud(s,'DATA 01 · PARETO',tot+' TRABAJOS')}<div class="ev-int" style="margin-top:6px;"><span style="color:${VC};">■</span> pocos vitales: ${nv} tipo(s) que explican el 80% (a la derecha) · <span style="color:${GC};">■</span> resto · <span style="color:${LC};">●</span> % acumulado. Barras de menor a mayor.</div></div>`;
 }
-function proyeccion(mios,nom){
+function proyeccion(mios,nom,etq){
   const ids=new Set(mios.map(x=>x.id)); const trs=Object.values(S.trabajos).filter(x=>ids.has(x.turnoId)&&x.fecha);
   if(trs.length<2) return '';
   const MN=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
@@ -556,14 +556,14 @@ function proyeccion(mios,nom){
     s+=`<text transform="translate(${p.cx+4},${T+ph+8}) rotate(-45)" text-anchor="end" font-size="${NM>16?6.5:7.5}" fill="${p.real?'#bfe9ff':'#7df9ff'}">${MN[p.mm.m]} ${String(p.mm.y).slice(2)}</text>`; });
   s+='</svg>';
   const prox=lastK+1<NM?pT[lastK+1]:null;
-  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Proyección ${MN[M0[1]]} ${M0[0]} – jul 2027</b><div class="ev-int">${esc(nom)} · trabajos por mes (real y proyectado)</div></div>${hud(s,'DATA 02 · PROYECCIÓN',(MN[M0[1]]+' '+String(M0[0]).slice(2)+' – JUL 27').toUpperCase())}<div class="kpi-strip c3" style="margin-top:6px;">${kc(prox!=null?fnum(prox,0):'—','Trabajos próx. mes','kpi-orange')}${kc(fnum(totAnual,0),'Trabajos '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-blue')}${costo?kc(fm(facAnual),'Facturado '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-green',1):kc(fnum(totAnual/NM,1),'Promedio mensual','kpi-green')}</div><div class="ev-int" style="margin-top:4px;"><span style="color:#35d0ff;">●</span> real${parcial?' (el último punto: mes en curso, incompleto)':''} · <span style="color:#7df9ff;">○</span> proyectado (línea punteada) (${fitN<3?'promedio':'tendencia lineal'} sobre ${fitN} mes(es) con datos completos). Los meses sin turnos cargados se estiman. El total suma lo real más lo proyectado. Es una estimación.</div></div>`;
+  return `<div class="plan-card" style="display:block;"><div class="plan-sys" style="margin-bottom:6px;"><b>Proyección ${MN[M0[1]]} ${M0[0]} – jul 2027</b><div class="ev-int">${esc(nom)} · trabajos por mes (real y proyectado) · ${esc(etq||'todos los períodos')}</div></div>${hud(s,'DATA 02 · PROYECCIÓN',(MN[M0[1]]+' '+String(M0[0]).slice(2)+' – JUL 27').toUpperCase())}<div class="kpi-strip c3" style="margin-top:6px;">${kc(prox!=null?fnum(prox,0):'—','Trabajos próx. mes','kpi-orange')}${kc(fnum(totAnual,0),'Trabajos '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-blue')}${costo?kc(fm(facAnual),'Facturado '+MN[M0[1]]+'-'+String(M0[0]).slice(2)+' a jul-27','kpi-green',1):kc(fnum(totAnual/NM,1),'Promedio mensual','kpi-green')}</div><div class="ev-int" style="margin-top:4px;"><span style="color:#35d0ff;">●</span> real${parcial?' (el último punto: mes en curso, incompleto)':''} · <span style="color:#7df9ff;">○</span> proyectado (línea punteada) (${fitN<3?'promedio':'tendencia lineal'} sobre ${fitN} mes(es) con datos completos). Los meses sin turnos cargados se estiman. El total suma lo real más lo proyectado. Es una estimación.</div></div>`;
 }
 
 /* ─── INICIO: comparativo de supervisores ─── */
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v37</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v38</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -571,7 +571,11 @@ function vInicio(c){
     const u=mios.find(x=>x.id===pid)||mios[0], k=kpiTurno(u.id);
     h+=`<div class="fg" style="margin-bottom:8px;"><label class="fl">Período a ver</label><select class="fs" onchange="try{localStorage.setItem('pv_per_${slug(n)}',this.value)}catch(e){};render()">${mios.map((x,i)=>`<option value="${x.id}" ${x.id===u.id?'selected':''}>${fmtD(x.inicio)} al ${fmtD(x.fin)}${i===0?' (último)':''}</option>`).join('')}</select></div>`;
     h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>${u===mios[0]?'Último turno':'Turno'}</b> · ${fmtD(u.inicio)} al ${fmtD(u.fin)}</div><div class="plan-int">${mios.length} turno(s)</div></div></div>`+kpiBlock(k);
-    h+=`<div class="chart-row">${pareto(mios,n)}${proyeccion(mios,n)}${gauge(n,u,k)}</div>`;
+    let alc='sel'; try{ alc=localStorage.getItem('pv_alc_'+slug(n))||'sel'; }catch(e){}
+    const hasta=mios.filter(x=>x.inicio<=u.inicio), perTxt=fmtD(u.inicio)+' al '+fmtD(u.fin);
+    const lP=alc==='all'?mios:[u], lY=alc==='all'?mios:hasta;
+    h+=`<div class="fg" style="margin-bottom:8px;"><label class="fl">Gráficos de ${esc(n)}</label><select class="fs" onchange="try{localStorage.setItem('pv_alc_${slug(n)}',this.value)}catch(e){};render()"><option value="sel" ${alc==='sel'?'selected':''}>Período seleccionado (${perTxt})</option><option value="all" ${alc==='all'?'selected':''}>Todos los períodos acumulados</option></select></div>`;
+    h+=`<div class="chart-row">${pareto(lP,n,alc==='all'?null:'período '+perTxt)}${proyeccion(lY,n,alc==='all'?null:'datos hasta el '+fmtD(u.fin))}${gauge(n,u,k)}</div>`;
     if(mios.length>1){
       const ks=mios.map(t=>kpiTurno(t.id)); const av=f=>ks.reduce((s,x)=>s+f(x),0)/ks.length;
       h+=`<div class="note">Promedio por turno (${ks.length}): ${fnum(av(x=>x.total))} trabajos · ${fnum(av(x=>x.backlogs))} backlogs · ${fnum(av(x=>x.qcTotal))} insp. QC`+(ocultarCostos()?'':` · ${fm(av(x=>x.fact))} facturado`)+`</div>`;
@@ -1593,7 +1597,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v37</div>
+  <div class="note">Versión de la app: v38</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
