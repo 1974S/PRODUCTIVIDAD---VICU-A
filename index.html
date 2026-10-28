@@ -563,7 +563,7 @@ function proyeccion(mios,nom,etq){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v39</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v40</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -723,7 +723,7 @@ function vFlota(c){
       h+=`<div class="btn-row wr" style="margin-top:10px;"><button class="btn-secondary" onclick="selTodasOT()">Seleccionar todas</button><button class="btn-primary" onclick="importarOT()">Importar seleccionadas</button></div><div class="note">Importa a "Trabajos": PM = programado; el resto, imprevisto. Revisá el tipo de reparación después, se clasifica por palabras clave.</div>`;
     }
   }
-  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('📥','Importar órdenes de trabajo valorizadas (PDF)','.pdf',1)+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+btnCarga('💲','Cargar lista de precios (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'lista')+btnCarga('📦','Cargar stock valorado (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'stock')+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+vPreciosEstado()+`</div>`;
+  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('⛏️','Importar OT valorizadas · Taller Mina (PDF)','.pdf',1,'hoja_mina')+btnCarga('🏢','Importar OT valorizadas · Taller Sede (PDF)','.pdf',1,'hoja_sede')+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+btnCarga('💲','Cargar lista de precios (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'lista')+btnCarga('📦','Cargar stock valorado (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'stock')+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+vPreciosEstado()+`</div>`;
   h+=`<div class="sec-hdr">Carga manual desde Excel / CSV</div><div class="wr">`+vImport()+`</div>`;
   c.innerHTML=h;
 }
@@ -889,7 +889,7 @@ function aplicarPar(t,o){
 }
 async function cargarInforme(fl,hint){
   const files=fl&&typeof fl.length==='number'&&!fl.name?[...fl]:(fl?[fl]:[]);
-  for(const f of files) await (hint?cargarPrecios(f,hint):cargarUno(f));
+  for(const f of files) await (/^hoja_/.test(hint||'')?cargarHojas(f,hint.slice(5)):hint?cargarPrecios(f,hint):cargarUno(f));
   render();
 }
 async function cargarPrecios(file,fuente){
@@ -912,6 +912,21 @@ async function cargarPrecios(file,fuente){
       if(!items.length){ rep={kind:'aviso',name:file.name,msg:'No se pudieron leer artículos con precio en este PDF. Si es un escaneo (imagen), cargá el Excel original.'}; return; }
       rep=Object.assign(base,{pdf:true,pages,items});
     }else rep={kind:'aviso',name:file.name,msg:'Formato no admitido. Cargá un Excel (.xlsx, .csv) o un PDF.'};
+  }catch(e){ rep=null; toast('No se pudo leer: '+e.message); }
+}
+async function cargarHojas(file,lugar){
+  try{
+    if(!/\.pdf$/i.test(file.name)){ rep={kind:'aviso',name:file.name,msg:'Las órdenes de trabajo valorizadas se cargan en PDF.'}; return; }
+    toast('Leyendo '+file.name+'…');
+    if(!window.pdfjsLib){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
+    const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+    const pages=[]; for(let p=1;p<=pdf.numPages;p++){ const tc=await (await pdf.getPage(p)).getTextContent(); pages.push(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]}))); }
+    if(!esHoja(pages)){ rep={kind:'aviso',name:file.name,msg:'Este PDF no es una "Hoja de explicación de trabajos y costos".'}; return; }
+    const ots=parseHojas(pages); if(!ots.length){ rep={kind:'aviso',name:file.name,msg:'Se reconoció una hoja de trabajos y costos, pero no se pudo leer ninguna orden.'}; return; }
+    ots.forEach(o=>{ o.lugar=lugar; o.base=o.key; o.key=o.key+'|'+lugar; if(lugar==='sede'){ o.sector='SEDE'; } else if(!/^mina/i.test(o.sector||'')) o.sector='MINA'; });
+    const nom=(lugar==='sede'?'Sede: ':'Mina: ')+file.name;
+    if(rep&&rep.kind==='hojas'){ const k=new Set(rep.ots.map(o=>o.key)); ots.forEach(o=>{ if(!k.has(o.key)) rep.ots.push(o); }); rep.names.push(nom); }
+    else rep={kind:'hojas',names:[nom],ots,crear:false};
   }catch(e){ rep=null; toast('No se pudo leer: '+e.message); }
 }
 async function cargarUno(file){
@@ -939,10 +954,7 @@ async function cargarUno(file){
       const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
       const pages=[]; for(let p=1;p<=pdf.numPages;p++){ const tc=await (await pdf.getPage(p)).getTextContent(); pages.push(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]}))); }
       if(esMensual(pages)&&!esHoja(pages)){ const p=parseMensual(pages); rep=(p.bk.length||p.pr.length)?Object.assign({kind:'mensual',name:file.name},p):{kind:'aviso',name:file.name,msg:'Se reconoció el PDF mensual pero no se encontraron filas. Cada fila debe empezar con la fecha (dd/mm/aaaa) y llevar supervisor y patente.'}; }
-      else if(esHoja(pages)){ const ots=parseHojas(pages);
-        if(!ots.length) rep={kind:'aviso',name:file.name,msg:'Se reconoció una hoja de trabajos y costos, pero no se pudo leer ninguna orden.'};
-        else if(rep&&rep.kind==='hojas'){ const k=new Set(rep.ots.map(o=>o.key)); ots.forEach(o=>{ if(!k.has(o.key)) rep.ots.push(o); }); rep.names.push(file.name); }
-        else rep={kind:'hojas',names:[file.name],ots,crear:false}; }
+      else if(esHoja(pages)) rep={kind:'aviso',name:file.name,msg:'Este PDF son órdenes de trabajo valorizadas. Cargalo con el botón de su taller: "Taller Mina" o "Taller Sede", porque los dos talleres repiten la numeración de las OT.'};
       else pdfPreview(file.name,pages);
     }else{ rep={kind:'aviso',name:file.name,msg:'Formato no admitido. Se pueden cargar .xlsx (cambio de turno), .docx y .pdf (informe de indicadores).'}; }
   }catch(e){ rep=null; toast('No se pudo leer: '+e.message); }
@@ -1122,11 +1134,11 @@ function parseHojas(pages){
   return [...out.values()];
 }
 function hojaMonto(o,k){ const c=cfg('moneda')==='USD'?'usd':'pesos'; return k==='rep'?o.repTot[c]:o.moTot[c]; }
-function hojaSup(o){ return supDeTexto(o.asesor)||supDeTexto(o.sup)||(/^sede\b/i.test(o.sector||'')?SUP_MENSUAL:''); }
-function hojasPendientes(R){ const ya=new Set(Object.values(S.trabajos).map(t=>t.hojaKey).filter(Boolean)); return R.ots.filter(o=>!ya.has(o.key)); }
+function hojaSup(o){ if(o.lugar==='sede') return SUP_MENSUAL; const s=supDeTexto(o.asesor)||supDeTexto(o.sup); if(o.lugar==='mina') return s&&s!==SUP_MENSUAL?s:''; return s||(/^sede\b/i.test(o.sector||'')?SUP_MENSUAL:''); }
+function hojasPendientes(R){ const ya=new Set(Object.values(S.trabajos).map(t=>t.hojaKey).filter(Boolean)); return R.ots.filter(o=>!ya.has(o.key)&&!(o.base&&ya.has(o.base))); }
 function hojasPlan(R){
   const pend=hojasPendientes(R);
-  const pairs=emparejar(Object.values(S.trabajos).filter(t=>!t.hojaKey),pend.map(o=>({key:o.key,nro:o.nro,patente:o.patente,fecha:o.fecha,pm:o.pm,sup:hojaSup(o)||null,mina:/^mina/i.test(o.sector||'')&&!hojaSup(o),o})));
+  const pairs=emparejar(Object.values(S.trabajos).filter(t=>!t.hojaKey),pend.map(o=>({key:o.key,nro:o.nro,patente:o.patente,fecha:o.fecha,pm:o.pm,sup:hojaSup(o)||null,mina:(o.lugar==='mina'||/^mina/i.test(o.sector||''))&&!hojaSup(o),o})));
   const usadas=new Set(pairs.map(p=>p[1].key));
   const sin=pend.filter(o=>!usadas.has(o.key));
   const crear=sin.map(o=>{ const s=hojaSup(o); const t=s&&Object.values(S.turnos).find(t=>t.supervisor===s&&enTurno(t,o.fecha)); return t?{o,t}:null; }).filter(Boolean);
@@ -1134,7 +1146,7 @@ function hojasPlan(R){
 }
 function vHojas(){
   const R=rep, P=hojasPlan(R), oc=ocultarCostos();
-  let h=`<div class="alert alert-info"><b>Órdenes de trabajo valorizadas</b> · ${esc(R.names.join(', '))}<br>${R.ots.length} OT leídas${P.ya?' ('+P.ya+' ya aplicadas antes)':''}${oc?'':' · repuestos '+fm(R.ots.reduce((s,o)=>s+hojaMonto(o,'rep'),0))+' · mano de obra '+fm(R.ots.reduce((s,o)=>s+hojaMonto(o,'mo'),0))}</div>`;
+  let h=`<div class="alert alert-info"><b>Órdenes de trabajo valorizadas</b> · ${esc(R.names.join(' | '))}<br>${R.ots.length} OT leídas${P.ya?' ('+P.ya+' ya aplicadas antes)':''}${oc?'':' · repuestos '+fm(R.ots.reduce((s,o)=>s+hojaMonto(o,'rep'),0))+' · mano de obra '+fm(R.ots.reduce((s,o)=>s+hojaMonto(o,'mo'),0))}</div>`;
   h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys">Se completan en trabajos ya cargados (misma patente y fecha): <b>${P.pairs.length}</b><div class="ev-int">Sin trabajo en ningún cambio de turno: ${P.sin.length}${P.crear.length?' · de ellas ' +P.crear.length+' caen en un turno de Manzini o Quiroga':''}</div></div></div></div>`;
   if(P.crear.length) h+=`<label class="chk-row" style="display:flex;gap:8px;align-items:center;margin:8px 0;"><input type="checkbox" class="chk" ${R.crear?'checked':''} onchange="rep.crear=this.checked"> Crear como trabajos las ${P.crear.length} OT que no figuran en el cambio de turno (se asignan al turno del supervisor que figura en la OT)</label>`;
   h+=`<div class="ev-list">${R.ots.slice(0,40).map(o=>{ const ok=P.pairs.some(p=>p[1].key===o.key), ya=!P.pend.includes(o); return `<div class="ev-card"><div class="ev-stripe ${o.pm?'sc-pm1':'sc-pm7'}"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(o.patente)} <span class="ev-int">OT ${esc(o.nro)}</span></div><div class="ev-date">${fmtDC(o.fecha)}</div></div><div class="ev-row2"><span class="badge ${o.pm?'pm1':'pm7'}">${o.pm?'PM':'Correctivo'}</span><span class="ev-area">${esc(hojaSup(o)||o.asesor||'')}</span><span class="badge ${ya||ok?'st-cumpl':''}">${ya?'Ya aplicada':ok?'Coincide con trabajo':'Sin coincidencia'}</span></div><div class="ev-obs">${o.rep.length} repuesto(s)${oc?'':' · Rep. '+fm(hojaMonto(o,'rep'))+' · MO '+fm(hojaMonto(o,'mo'))}</div></div></div>`; }).join('')}</div>${R.ots.length>40?`<div class="note">… y ${R.ots.length-40} más.</div>`:''}`;
@@ -1622,7 +1634,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v39</div>
+  <div class="note">Versión de la app: v40</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
