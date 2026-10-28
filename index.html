@@ -564,7 +564,7 @@ function proyeccion(mios,nom,etq){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v42</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v43</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -724,7 +724,7 @@ function vFlota(c){
       h+=`<div class="btn-row wr" style="margin-top:10px;"><button class="btn-secondary" onclick="selTodasOT()">Seleccionar todas</button><button class="btn-primary" onclick="importarOT()">Importar seleccionadas</button></div><div class="note">Importa a "Trabajos": PM = programado; el resto, imprevisto. Revisá el tipo de reparación después, se clasifica por palabras clave.</div>`;
     }
   }
-  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('⛏️','Importar OT valorizadas · Taller Mina (PDF)','.pdf',1,'hoja_mina')+btnCarga('🏢','Importar OT valorizadas · Taller Sede (PDF)','.pdf',1,'hoja_sede')+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+btnCarga('💲','Cargar lista de precios (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'lista')+btnCarga('📦','Cargar stock valorado (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'stock')+btnCarga('🧾','Cargar EDP del mes (Excel / PDF)','.xlsx,.xls,.pdf',0,'edp')+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+vPreciosEstado()+vEdpEstado()+`</div>`;
+  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('⛏️','Importar OT valorizadas · Taller Mina (PDF)','.pdf',1,'hoja_mina')+btnCarga('🏢','Importar OT valorizadas · Taller Sede (PDF)','.pdf',1,'hoja_sede')+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+btnCarga('💲','Cargar lista de precios (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'lista')+btnCarga('📦','Cargar stock valorado (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'stock')+btnCarga('🧾','Cargar EDP del mes (Excel / PDF) y respaldo de órdenes firmadas (ZIP / fotos)','.xlsx,.xls,.pdf,.zip,.jpg,.jpeg,.png',1,'edp')+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+vPreciosEstado()+vEdpEstado()+`</div>`;
   h+=`<div class="sec-hdr">Carga manual desde Excel / CSV</div><div class="wr">`+vImport()+`</div>`;
   c.innerHTML=h;
 }
@@ -996,6 +996,7 @@ function vInforme(){
   }
   if(rep.kind==='hojas') return vHojas();
   if(rep.kind==='edp') return vEdp();
+  if(rep.kind==='edpresp') return vEdpResp();
   if(rep.kind==='mensual') return vMensual();
   if(rep.kind==='precios') return vPrecios();
   if(rep.kind==='pdf'){
@@ -1206,6 +1207,7 @@ function parseEdpExcel(wb){
 }
 async function cargarEdp(file){
   const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(['zip','jpg','jpeg','png'].includes(ext)) return cargarEdpResp(file,ext);
   try{
     toast('Leyendo '+file.name+'…');
     let R=null;
@@ -1227,6 +1229,33 @@ async function cargarEdp(file){
     rep=Object.assign(R,{kind:'edp',name:file.name,estado:prev?prev.estado:'presentado',tc:R.tc||(prev&&prev.tc)||null});
   }catch(e){ rep=null; toast('No se pudo leer: '+e.message); }
 }
+async function cargarEdpResp(file,ext){
+  try{
+    if(!Object.keys(S.edp||{}).length){ rep={kind:'aviso',name:file.name,msg:'Primero cargá el Excel del EDP del mes; después podés adjuntarle las órdenes firmadas (ZIP o fotos).'}; return; }
+    let n=1, nombres=[file.name];
+    if(ext==='zip'){
+      if(!window.JSZip) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+      const z=await JSZip.loadAsync(await file.arrayBuffer()); const fs=Object.keys(z.files).filter(k=>!z.files[k].dir&&/\.(jpe?g|png|pdf)$/i.test(k)&&!/(^|\/)(__MACOSX|\.)/.test(k));
+      if(!fs.length){ rep={kind:'aviso',name:file.name,msg:'El ZIP no contiene fotos ni PDF de órdenes.'}; return; }
+      n=fs.length;
+    }
+    const lug=/sede|san\s*juan|\bsj\b/i.test(file.name)?'sede':'mina';
+    const ids=Object.keys(S.edp).sort().reverse();
+    const prev=rep&&rep.kind==='edpresp'?rep:null;
+    if(prev){ prev.items.push({name:file.name,n,lugar:lug}); }
+    else rep={kind:'edpresp',id:ids[0],items:[{name:file.name,n,lugar:lug}]};
+  }catch(e){ rep=null; toast('No se pudo leer: '+e.message); }
+}
+function vEdpResp(){
+  const R=rep, ids=Object.keys(S.edp).sort().reverse(), tot=R.items.reduce((s,i)=>s+i.n,0);
+  let h=`<div class="alert alert-info"><b>Respaldo de órdenes firmadas</b><br>${R.items.map(i=>esc(i.name)+' · '+i.n+' hoja(s) · Taller '+(i.lugar==='sede'?'Sede':'Mina')).join('<br>')}<br>Total: ${tot} hoja(s). Son imágenes: la app las cuenta y las asocia al EDP, no lee su contenido.</div>`;
+  h+=`<div class="fg"><label class="fl">EDP al que corresponden</label><select class="fs" onchange="rep.id=this.value">${ids.map(i=>`<option value="${i}" ${i===R.id?'selected':''}>${esc(S.edp[i].mes)}${S.edp[i].num?' · EDP N° '+esc(S.edp[i].num):''}</option>`).join('')}</select></div>`;
+  h+=`<div class="btn-row wr"><button class="btn-secondary" onclick="rep=null;render()">Cancelar</button><button class="btn-primary" onclick="aplicarEdpResp()">Asociar al EDP</button></div><div class="note">Podés elegir varios ZIP a la vez. Si el nombre del archivo dice "Sede" se cuenta como Taller Sede; si no, como Taller Mina.</div>`;
+  return h;
+}
+function aplicarEdpResp(){ const R=rep; if(!R||R.kind!=='edpresp') return; const e=S.edp[R.id]; if(!e) return;
+  const prev=(e.respaldos||[]).filter(x=>!R.items.some(i=>i.name===x.name)); put('edp',Object.assign({},e,{respaldos:[...prev,...R.items]}));
+  rep=null; toast('Respaldo asociado al EDP '+e.mes); render(); }
 function edpConv(e,ars){ const m=cfg('moneda'); if(m!=='USD') return ars; return e.tc>0?ars/e.tc:0; }
 function edpMatch(edps){
   const out=new Map(), usadas=new Set();
@@ -1281,7 +1310,7 @@ function vEdpEstado(){
   const ids=Object.keys(S.edp||{}).sort().reverse(), oc=ocultarCostos();
   let h=`<div class="sec-hdr">EDP cargados</div><div class="plan-card">`+(ids.length?'':`<div class="plan-row"><div class="plan-sys"><div class="ev-int">Todavía no hay EDP cargados.</div></div></div>`);
   ids.forEach(id=>{ const e=S.edp[id], T=edpTot(e), m=edpMatch([e]).size, n=(e.ors||[]).length, f=x=>fm(edpConv(e,x));
-    h+=`<div class="plan-row"><div class="plan-sys">${esc(e.mes)}${e.num?' · EDP N° '+esc(e.num):''}<div class="ev-int">${e.pdf?'Solo resumen (PDF)':n+' OR · '+m+' con trabajo'}${oc||e.pdf?'':' · Mina '+f(T.mina.mo+T.mina.rep)+' · Sede '+f(T.sede.mo+T.sede.rep)}</div><select class="fs" ${soloLectura()?'disabled':''} onchange="cambiarEdp('${id}',this.value)"><option value="presentado" ${e.estado==='presentado'?'selected':''}>Presentado</option><option value="aprobado" ${e.estado==='aprobado'?'selected':''}>Aprobado (facturado)</option></select></div><button class="btn-secondary btn-sm" onclick="delEdp('${id}')">Quitar</button></div>`; });
+    h+=`<div class="plan-row"><div class="plan-sys">${esc(e.mes)}${e.num?' · EDP N° '+esc(e.num):''}<div class="ev-int">${e.pdf?'Solo resumen (PDF)':n+' OR · '+m+' con trabajo'}${oc||e.pdf?'':' · Mina '+f(T.mina.mo+T.mina.rep)+' · Sede '+f(T.sede.mo+T.sede.rep)}${(e.respaldos||[]).length?'<br>Respaldo firmado: Mina '+e.respaldos.filter(r=>r.lugar!=='sede').reduce((s,r)=>s+r.n,0)+' · Sede '+e.respaldos.filter(r=>r.lugar==='sede').reduce((s,r)=>s+r.n,0)+' hoja(s)':''}</div><select class="fs" ${soloLectura()?'disabled':''} onchange="cambiarEdp('${id}',this.value)"><option value="presentado" ${e.estado==='presentado'?'selected':''}>Presentado</option><option value="aprobado" ${e.estado==='aprobado'?'selected':''}>Aprobado (facturado)</option></select></div><button class="btn-secondary btn-sm" onclick="delEdp('${id}')">Quitar</button></div>`; });
   return h+`</div>`;
 }
 
@@ -1776,7 +1805,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v42</div>
+  <div class="note">Versión de la app: v43</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
