@@ -565,7 +565,7 @@ function proyeccion(mios,nom,etq){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v52</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v53</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -1425,21 +1425,28 @@ function botonesInfStock(){ return ocultarCostos()?'':`<div class="sec-hdr">Info
 const loteDe=x=>x.lote||('pm_'+slug(x.sup)+'_'+x.fecha);
 function parseTablaPedido(aoa){
   let hi=-1,m={};
-  for(let i=0;i<Math.min(aoa.length,60);i++){ const h=aoa[i].map(norm); const ds=h.findIndex(x=>RE_DESC.test(x)), ct=h.findIndex(x=>/^cant|^unid|^qty|pedid/.test(x)); if(ds>=0&&ct>=0&&ds!==ct){ hi=i; m={ds,ct,cod:h.findIndex(x=>/parte|codigo|^cod\b|sku/.test(x)),fe:h.findIndex(x=>/^fecha/.test(x)),pa:h.findIndex(x=>/patente|dominio|unidad|vehiculo/.test(x)),ot:h.findIndex(x=>/^ot\b|^n ?ot|orden/.test(x))}; break; } }
+  for(let i=0;i<Math.min(aoa.length,60);i++){ const h=aoa[i].map(norm); const ds=h.findIndex(x=>RE_DESC.test(x)), ct=h.findIndex(x=>/^cant|^unid|^qty|pedid|^pedir/.test(x)); if(ds>=0&&ct>=0&&ds!==ct){ hi=i; m={ds,ct,cod:h.findIndex(x=>/parte|codigo|^cod\b|sku/.test(x)),fe:h.findIndex(x=>/^fecha/.test(x)),pa:h.findIndex(x=>/patente|dominio|unidad|vehiculo/.test(x)),ot:h.findIndex(x=>/^ot\b|^n ?ot|orden/.test(x))}; break; } }
   if(hi<0) return null;
-  const items=[]; aoa.slice(hi+1).forEach(r=>{ const d=String(r[m.ds]||'').trim(); const c=numAR(r[m.ct]); if(!d||!(c>0)) return;
-    const it={codigo:m.cod>=0?String(r[m.cod]||'').trim():'',desc:d,cant:c,patente:m.pa>=0?String(r[m.pa]||'').toUpperCase().replace(/[^A-Z0-9]/g,''):'',ot:m.ot>=0?String(r[m.ot]||'').trim():''};
+  const items=[]; aoa.slice(hi+1).forEach(r=>{ const d=String(r[m.ds]||'').trim(); let c=numAR(r[m.ct]); if(!(c>0)){ const mq=String(r[m.ct]||'').trim().match(/^(\d+(?:[.,]\d+)?)\s*[A-Za-zÁÉÍÓÚ.]*$/); if(mq) c=num(mq[1]); } if(!d||!(c>0)||/^total\b/i.test(d)) return;
+    const it={codigo:m.cod>=0?String(r[m.cod]||'').trim():'',desc:d.replace(/\s+/g,' '),cant:c,patente:m.pa>=0?String(r[m.pa]||'').toUpperCase().replace(/[^A-Z0-9]/g,''):'',ot:m.ot>=0?String(r[m.ot]||'').trim():''};
     if(m.fe>=0){ const f=r[m.fe]; const iso=(Object.prototype.toString.call(f)==='[object Date]'&&!isNaN(f))?new Date(f.getTime()+12*3600e3).toISOString().slice(0,10):toISO(String(f||'')); if(iso) it.fecha=iso; }
     items.push(it); });
   return items.length?items:null;
 }
+function parsePedidoMeta(aoa){
+  const M={nro:'',fecha:'',sup:''}; const txt=aoa.slice(0,12).map(r=>r.map(x=>x==null?'':String(x)).join('  ')).join('\n');
+  let m=txt.match(/PEDIDO[^\n]*?N[°º.o]*\s*(\d+)/i); if(m) M.nro=m[1];
+  m=txt.match(/Fecha:?\s*(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/i); if(m){ let y=m[3]; if(y.length===2) y='20'+y; M.fecha=y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'); }
+  m=txt.match(/SUP:?\s*([^\n]+)/i); if(m) M.sup=supDeTexto(m[1]);
+  return M;
+}
 async function cargarPedido(file,sup){
   try{
-    const ext=(file.name.split('.').pop()||'').toLowerCase(); let items=null, tx='';
+    const ext=(file.name.split('.').pop()||'').toLowerCase(); let items=null, tx='', meta={nro:'',fecha:'',sup:''};
     if(['xlsx','xls','csv'].includes(ext)){
       if(!window.XLSX) throw new Error('Librería Excel no disponible (sin conexión)');
       const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array',cellDates:true});
-      for(const sn of wb.SheetNames){ items=parseTablaPedido(XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:''})); if(items) break; }
+      for(const sn of wb.SheetNames){ const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:''}); items=parseTablaPedido(aoa); if(items){ meta=parsePedidoMeta(aoa); break; } }
     }else if(ext==='pdf'){
       if(!window.pdfjsLib){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
       const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise; const pages=[];
@@ -1452,7 +1459,7 @@ async function cargarPedido(file,sup){
     const R0=tx?parseRemito(tx):{fecha:'',obs:''};
     if(!items){ rep={kind:'aviso',name:file.name,msg:'No pude leer repuestos de este archivo. Probá con un Excel con columnas Descripción y Cantidad, o cargá el pedido a mano.'}; return; }
     const fechas=[...new Set(items.map(i=>i.fecha).filter(Boolean))];
-    rep={kind:'pedido',sup,fecha:fechas.length===1?fechas[0]:(R0.fecha||hoyISO()),nro:'',obs:R0.obs||'',items:items.map(i=>({codigo:i.codigo||'',desc:i.desc,cant:i.cant,patente:i.patente||'',ot:i.ot||'',fecha:i.fecha||''})),archivo:file.name,ocr:tx,lote:'',nuevo:true};
+    rep={kind:'pedido',sup:meta.sup||sup,fecha:meta.fecha||(fechas.length===1?fechas[0]:(R0.fecha||hoyISO())),nro:meta.nro||'',obs:R0.obs||'',items:items.map(i=>({codigo:i.codigo||'',desc:i.desc,cant:i.cant,patente:i.patente||'',ot:i.ot||'',fecha:i.fecha||''})),archivo:file.name,ocr:tx,lote:'',nuevo:true};
   }catch(e){ rep=null; toast('No se pudo leer el pedido: '+e.message); }
 }
 let rep0=null;
@@ -2147,7 +2154,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v52</div>
+  <div class="note">Versión de la app: v53</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
