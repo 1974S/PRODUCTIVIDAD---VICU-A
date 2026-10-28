@@ -296,12 +296,13 @@ function whenAuthReady(cb){ if(!window.firebase) return; const un=firebase.auth(
 const clean=o=>JSON.parse(JSON.stringify(o));
 
 /* ═══════════ ESTADO ═══════════ */
-const COLS=['turnos','trabajos','backlogs','qc'];
+const COLS=['turnos','trabajos','backlogs','qc','edp'];
 const LS='pv_data_v1';
-let S={turnos:{},trabajos:{},backlogs:{},qc:{},config:{}};
+let S={turnos:{},trabajos:{},backlogs:{},qc:{},edp:{},config:{}};
 try{ const r=JSON.parse(localStorage.getItem(LS)||'null'); if(r){ S=Object.assign(S,r); } }catch(e){}
 COLS.forEach(c=>{ if(!S[c]) S[c]={}; });
 if(!S.config) S.config={};
+let EDPC=null;
 let curTab='inicio';
 let selT=localStorage.getItem('pv_sel')||'';
 let flotaOT=[]; let flotaSel={}; let flotaModo='sup';
@@ -312,13 +313,13 @@ function tipos(){ const t=cfg('tipos'); return Array.isArray(t)&&t.length?t:TIPO
 
 function put(col,obj){
   if(soloLectura()) return;
-  S[col][obj.id]=obj; persist();
+  S[col][obj.id]=obj; EDPC=null; persist();
   if(db&&fbOK) db.ref('productividad/'+col+'/'+obj.id).set(clean(obj)).catch(e=>toast('Error al sincronizar: '+e.message));
 }
 function del(col,id){
   if(soloLectura()) return;
   if(/^(wa|wf|qa|ba)_/.test(id)) descartar(id);
-  delete S[col][id]; persist();
+  delete S[col][id]; EDPC=null; persist();
   if(db&&fbOK) db.ref('productividad/'+col+'/'+id).remove().catch(()=>{});
 }
 function putCfg(){ if(soloLectura()) return; persist(); if(db&&fbOK) db.ref('productividad/config').set(clean(S.config)).catch(()=>{}); }
@@ -335,7 +336,7 @@ function attachFirebase(){
         if(!firstSnap[c]){ firstSnap[c]=true;
           Object.keys(S[c]).forEach(id=>{ if(!(id in remote)){ remote[id]=S[c][id]; if(!soloLectura()) ref.child(id).set(clean(S[c][id])); } });
         }
-        S[c]=remote; persist(); softRender();
+        S[c]=remote; EDPC=null; persist(); softRender();
       },err=>{ fbEstado='Sin permiso: '+err.message; });
     });
     db.ref('productividad/precios').on('value',snap=>{ const v=snap.val(); if(v){ PRE=v; savePre(); valorarRepuestos(); softRender(); } });
@@ -388,12 +389,12 @@ function repFact(x){ if(x.repFact!=null&&x.repFact!==''&&num(x.repFact)>0) retur
 
 function kpiTurno(tid){
   const tr=recs('trabajos',tid), bl=recs('backlogs',tid), qc=recs('qc',tid);
-  const k={total:tr.length,prog:0,imprev:0,porTipo:{},repUnid:0,repLineas:0,repAgg:{},backlogs:bl.length,qcTotal:qc.length,qcOk:0,qcObs:0,qcNok:0,mo:0,rep:0,hh:0,hsDisp:0,util:null};
+  const k={total:tr.length,prog:0,imprev:0,porTipo:{},repUnid:0,repLineas:0,repAgg:{},backlogs:bl.length,qcTotal:qc.length,qcOk:0,qcObs:0,qcNok:0,mo:0,rep:0,hh:0,hsDisp:0,util:null,edpPres:0,edpApr:0};
   tr.forEach(x=>{
     const p=x.condicion==='programado'; if(p) k.prog++; else k.imprev++;
     const tp=x.reparacion||'Sin clasificar'; const o=(k.porTipo[tp]=k.porTipo[tp]||{p:0,i:0}); if(p) o.p++; else o.i++;
     (x.repuestos||[]).forEach(r=>{ const c=num(r.cant); k.repUnid+=c; k.repLineas++; const key=(r.desc||r.codigo||'s/d').trim(); k.repAgg[key]=(k.repAgg[key]||0)+c; });
-    k.mo+=num(x.moFact); k.rep+=repFact(x); k.hh+=num(x.hh);
+    const ft=factTr(x); k.mo+=ft.mo; k.rep+=ft.rep; k.hh+=num(x.hh); if(ft.pend) k.edpPres+=ft.pend; if(ft.edp==='aprobado') k.edpApr++;
   });
   { const T=S.turnos[tid]; k.hsDisp=T?(num(T.hsDisp)||(num(T.hsTurno)*diasPeriodo(T))):0; k.util=k.hh>0?pct(k.hh,k.hsDisp):null; }
   k.qcSin=0; qc.forEach(q=>{ if(q.resultado==='No conforme') k.qcNok++; else if(q.resultado==='Con observaciones') k.qcObs++; else if(q.resultado==='Realizada') k.qcSin++; else k.qcOk++; });
@@ -476,7 +477,7 @@ function kpiBlock(k){
   let h=`<div class="kpi-strip">${kc(k.total,'Trabajos','kpi-blue')}${kc(k.prog,'Programados','kpi-green')}${kc(k.imprev,'Imprevistos','kpi-orange')}${kc(k.backlogs,'Backlogs','kpi-purple')}</div>`;
   h+=`<div class="kpi-strip">${kc(k.qcTotal,'Insp. QC','kpi-blue')}${kc(fpct(k.pQC),'QC conformes','kpi-green')}${kc(fnum(k.repUnid,1),'Repuestos (unid.)','kpi-orange')}${kc(fpct(k.pProg),'% programado','kpi-purple')}</div>`;
   if(k.hh>0) h+=`<div class="kpi-strip c3">${kc(fnum(k.hh,0),'Horas hombre','kpi-blue')}${kc(fnum(k.hsDisp,0),'Hs. disponibles','kpi-orange')}${kc(fpct(k.util),'Utilización','kpi-green')}</div>`;
-  if(!ocultarCostos()) h+=`<div class="kpi-strip c3">${kc(fm(k.mo),'Facturado mano de obra','kpi-blue',1)}${kc(fm(k.rep),'Facturado repuestos','kpi-orange',1)}${kc(fm(k.fact),'Total facturado','kpi-green',1)}</div>`;
+  if(!ocultarCostos()) h+=`<div class="kpi-strip c3">${kc(fm(k.mo),'Facturado mano de obra','kpi-blue',1)}${kc(fm(k.rep),'Facturado repuestos','kpi-orange',1)}${kc(fm(k.fact),'Total facturado','kpi-green',1)}</div>`+(k.edpPres>0||k.edpApr?`<div class="kpi-strip c2">${kc(k.edpApr,'Trabajos con EDP aprobado','kpi-green')}${kc(fm(k.edpPres),'EDP presentado, pendiente de aprobación','kpi-orange',1)}</div>`:'');
   return h;
 }
 
@@ -528,7 +529,7 @@ function proyeccion(mios,nom,etq){
   const meses=[]; for(let k=0;k<NM;k++){ const a=M0[1]+k; meses.push({y:M0[0]+Math.floor(a/12),m:a%12}); }
   const key=(y,m)=>y+'-'+String(m+1).padStart(2,'0'); const idx={}; meses.forEach((x,k)=>idx[key(x.y,x.m)]=k);
   const tot=meses.map(()=>0), fac=meses.map(()=>0), pg=meses.map(()=>0);
-  trs.forEach(x=>{ const k=idx[x.fecha.slice(0,7)]; if(k==null) return; tot[k]++; if(x.condicion==='programado') pg[k]++; fac[k]+=num(x.moFact)+repFact(x); });
+  trs.forEach(x=>{ const k=idx[x.fecha.slice(0,7)]; if(k==null) return; tot[k]++; if(x.condicion==='programado') pg[k]++; { const ft=factTr(x); fac[k]+=ft.mo+ft.rep; } });
   const fin=mios.reduce((a,x)=>x.fin>a?x.fin:a,''); const cub=meses.map(()=>false);
   mios.forEach(x=>{ const a=idx[x.inicio.slice(0,7)], b=idx[x.fin.slice(0,7)]; if(a!=null&&a===b) cub[a]=true; }); tot.forEach((v,k)=>{ if(v>0) cub[k]=true; });
   const lastK=cub.lastIndexOf(true); if(lastK<0) return '';
@@ -563,7 +564,7 @@ function proyeccion(mios,nom,etq){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v40</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v41</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -723,7 +724,7 @@ function vFlota(c){
       h+=`<div class="btn-row wr" style="margin-top:10px;"><button class="btn-secondary" onclick="selTodasOT()">Seleccionar todas</button><button class="btn-primary" onclick="importarOT()">Importar seleccionadas</button></div><div class="note">Importa a "Trabajos": PM = programado; el resto, imprevisto. Revisá el tipo de reparación después, se clasifica por palabras clave.</div>`;
     }
   }
-  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('⛏️','Importar OT valorizadas · Taller Mina (PDF)','.pdf',1,'hoja_mina')+btnCarga('🏢','Importar OT valorizadas · Taller Sede (PDF)','.pdf',1,'hoja_sede')+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+btnCarga('💲','Cargar lista de precios (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'lista')+btnCarga('📦','Cargar stock valorado (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'stock')+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+vPreciosEstado()+`</div>`;
+  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('⛏️','Importar OT valorizadas · Taller Mina (PDF)','.pdf',1,'hoja_mina')+btnCarga('🏢','Importar OT valorizadas · Taller Sede (PDF)','.pdf',1,'hoja_sede')+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+btnCarga('💲','Cargar lista de precios (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'lista')+btnCarga('📦','Cargar stock valorado (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'stock')+btnCarga('🧾','Cargar EDP del mes (Excel / PDF)','.xlsx,.xls,.pdf',0,'edp')+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+vPreciosEstado()+vEdpEstado()+`</div>`;
   h+=`<div class="sec-hdr">Carga manual desde Excel / CSV</div><div class="wr">`+vImport()+`</div>`;
   c.innerHTML=h;
 }
@@ -889,7 +890,7 @@ function aplicarPar(t,o){
 }
 async function cargarInforme(fl,hint){
   const files=fl&&typeof fl.length==='number'&&!fl.name?[...fl]:(fl?[fl]:[]);
-  for(const f of files) await (/^hoja_/.test(hint||'')?cargarHojas(f,hint.slice(5)):hint?cargarPrecios(f,hint):cargarUno(f));
+  for(const f of files) await (/^hoja_/.test(hint||'')?cargarHojas(f,hint.slice(5)):hint==='edp'?cargarEdp(f):hint?cargarPrecios(f,hint):cargarUno(f));
   render();
 }
 async function cargarPrecios(file,fuente){
@@ -994,6 +995,7 @@ function vInforme(){
     return h;
   }
   if(rep.kind==='hojas') return vHojas();
+  if(rep.kind==='edp') return vEdp();
   if(rep.kind==='mensual') return vMensual();
   if(rep.kind==='precios') return vPrecios();
   if(rep.kind==='pdf'){
@@ -1161,6 +1163,126 @@ function aplicarHojas(){
   let nc=0;
   if(R.crear) P.crear.forEach(({o,t})=>{ const d=o.desc||o.req; const nt={id:uid('w'),turnoId:t.id,fecha:o.fecha,unidad:o.patente,condicion:o.pm?'programado':'imprevisto',reparacion:clasificarRep(d+' '+o.rep.map(r=>r.desc).join(' '),o.pm?'PM':''),descripcion:String(d).slice(0,400),horas:null,hh:null,moFact:null,repFact:null,creado:Date.now()}; llenar(nt,o); nt.origen='hoja'; put('trabajos',nt); nc++; });
   rep=null; toast(P.pairs.length+' trabajo(s) completados con repuestos y costos'+(nc?' · '+nc+' creados':'')); render();
+}
+
+
+/* ═══════════ EDP (Estado de Pago) ═══════════ */
+function isDt(d){ return Object.prototype.toString.call(d)==='[object Date]'&&!isNaN(d); }
+function edpISO(d){ if(isDt(d)){ return new Date(d.getTime()+12*3600e3).toISOString().slice(0,10); } if(typeof d==='string'&&/^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0,10); const m=String(d||'').match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); return m?m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'):''; }
+function edpPat(s){ return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function edpNro(s){ return String(s==null?'':s).replace(/\D/g,'').replace(/^0+/,''); }
+function parseEdpExcel(wb){
+  const nm=wb.SheetNames; const sd=nm.find(n=>/detalle/i.test(n))||nm[1]; const s1=nm.find(n=>!/detalle/i.test(n))||nm[0];
+  if(!sd||sd===s1) return null;
+  const A1=XLSX.utils.sheet_to_json(wb.Sheets[s1],{header:1,raw:true,defval:''}), A2=XLSX.utils.sheet_to_json(wb.Sheets[sd],{header:1,raw:true,defval:''});
+  const R={num:'',op:'',mes:'',desde:'',hasta:'',resumen:{},ors:[],secs:[],tc:null,ctl:{}};
+  A1.forEach((r,i)=>{ r.forEach((v,j)=>{
+    if(typeof v!=='string') return;
+    let m=v.match(/Estado de Pago\s*No\.?\s*\[?\s*(\w+)/i); if(m&&!R.num) R.num=m[1];
+    const nx=()=>{ for(let k=j+1;k<r.length;k++) if(r[k]!==''&&r[k]!=null) return r[k]; return ''; };
+    if(/n[uú]mero de op/i.test(v)) R.op=String(nx());
+    if(/periodo del edp/i.test(v)){ const d=edpISO(nx()); if(d) R.mes=d.slice(0,7); }
+    if(/^desde/i.test(v.trim())) R.desde=edpISO(nx());
+    if(/^hasta/i.test(v.trim())) R.hasta=edpISO(nx());
+    const lin=(k,re)=>{ if(re.test(v)&&j<3&&typeof r[14]==='number') R.resumen[k]=r[14]; };
+    lin('servicio',/^serv\./i); lin('repuestos',/^repuestos/i); lin('reparacion',/^reparaci[oó]n/i); lin('total',/total de valorizaci/i);
+    if(/total de valorizaci/i.test(v)&&typeof r[14]==='number') R.resumen.total=r[14];
+  }); });
+  let sec=-1,label='',cur=null;
+  A2.forEach((r,i)=>{
+    const c0=String(r[0]||'').trim(), c1=r[1], c2=r[2], c3=r[3];
+    if(!c0&&typeof c1==='string'&&/^taller/i.test(c1.trim())){ label=c1.trim(); return; }
+    if(/^c[oó]digo$/i.test(c0)&&/ord/i.test(String(c2||''))){ sec++; const lug=/sede|sj|san\s*juan/i.test(label)?'sede':(sec===0?'mina':'sede'); R.secs.push({label,lugar:lug}); cur=null; return; }
+    if(sec<0) return;
+    if((typeof c2==='number'||/^\d+$/.test(String(c2).trim()))&&isDt(c3)&&typeof r[6]==='string'&&r[6].trim()){
+      cur={nro:edpNro(c2),fecha:edpISO(c3),pat:edpPat(r[6]),lugar:R.secs[sec].lugar,mo:0,rep:0,lineas:0}; R.ors.push(cur); return; }
+    if(cur&&typeof c3==='string'&&/^(repuestos|rec\.?\s*gto\.?|m\.?\s*obra)$/i.test(c3.trim())){ cur.mo+=num(r[4]); cur.rep+=num(r[7]); cur.lineas++; return; }
+    if(typeof c3==='number'&&typeof r[6]==='number'&&c3===r[6]&&c3>50&&c3<100000) R.tc=c3;
+    if(typeof c3==='string'&&typeof r[4]==='number'){ if(/^rep mina/i.test(c3)) R.ctl.repMina=r[4]; else if(/^rep sj|^rep sede/i.test(c3)) R.ctl.repSede=r[4]; else if(/^mo$/i.test(c3.trim())) R.ctl.mo=r[4]; }
+  });
+  R.ors.forEach(o=>{ o.mo=Math.round(o.mo*100)/100; o.rep=Math.round(o.rep*100)/100; });
+  if(!R.mes){ const c={}; R.ors.forEach(o=>{ const m=o.fecha.slice(0,7); if(m) c[m]=(c[m]||0)+1; }); R.mes=Object.keys(c).sort((a,b)=>c[b]-c[a])[0]||mesActual(); }
+  return R;
+}
+async function cargarEdp(file){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  try{
+    toast('Leyendo '+file.name+'…');
+    let R=null;
+    if(['xlsx','xls'].includes(ext)){
+      if(!window.XLSX) throw new Error('Librería Excel no disponible (sin conexión)');
+      const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array',cellDates:true}); R=parseEdpExcel(wb);
+      if(!R||!R.ors.length){ rep={kind:'aviso',name:file.name,msg:'No se encontró la hoja "Detalle de OR" con órdenes de reparación. El EDP debe tener la hoja de resumen y la de detalle.'}; return; }
+    }else if(ext==='pdf'){
+      if(!window.pdfjsLib){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
+      const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise; let tx='';
+      for(let p=1;p<=pdf.numPages;p++){ const tc=await (await pdf.getPage(p)).getTextContent(); tx+=tc.items.map(i=>i.str).join(' ')+'\n'; }
+      if(!/estado de pago|edp/i.test(tx)){ rep={kind:'aviso',name:file.name,msg:'Este PDF no parece ser un Estado de Pago.'}; return; }
+      const g=re=>{ const m=tx.match(re); return m?m[1]:''; }; const nA=s=>{ s=String(s).replace(/\s/g,''); return s.includes(',')&&s.lastIndexOf(',')>s.lastIndexOf('.')?num(s.replace(/\./g,'').replace(',','.')):num(s.replace(/,/g,'')); };
+      R={num:g(/Estado de Pago\s*No\.?\s*\[?\s*(\w+)/i),op:g(/N[uú]mero de OP\s*:?\s*(\d+)/i),mes:'',desde:'',hasta:'',resumen:{},ors:[],secs:[],tc:null,ctl:{},pdf:true};
+      const mm=tx.match(/Periodo[^0-9]{0,30}(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/i); if(mm) R.mes=mm[3]+'-'+mm[2].padStart(2,'0'); else R.mes=mesActual();
+      const tt=g(/Total de Valorizaci[oó]n\s*[\$USD ]*([\d.,]+)/i); if(tt) R.resumen.total=nA(tt);
+    }else{ rep={kind:'aviso',name:file.name,msg:'Formato no admitido. Cargá el EDP en Excel (.xlsx) o PDF.'}; return; }
+    const prev=S.edp['edp_'+R.mes];
+    rep=Object.assign(R,{kind:'edp',name:file.name,estado:prev?prev.estado:'presentado',tc:R.tc||(prev&&prev.tc)||null});
+  }catch(e){ rep=null; toast('No se pudo leer: '+e.message); }
+}
+function edpConv(e,ars){ const m=cfg('moneda'); if(m!=='USD') return ars; return e.tc>0?ars/e.tc:0; }
+function edpMatch(edps){
+  const out=new Map(), usadas=new Set();
+  const lst=[]; [...edps].sort((a,b)=>(a.mes||'').localeCompare(b.mes||'')).forEach(e=>(e.ors||[]).forEach(o=>lst.push({e,o,k:e.id+'|'+o.nro+'|'+o.pat})));
+  const byPat={}; lst.forEach(z=>{ (byPat[z.o.pat]=byPat[z.o.pat]||[]).push(z); });
+  const trs=Object.values(S.trabajos).filter(x=>x.unidad).sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+  const lug=x=>{ const T=S.turnos[x.turnoId]; return T?(T.supervisor===SUP_MENSUAL?'sede':'mina'):''; };
+  const ok=(z,x)=>{ const l=lug(x); return !l||l===z.o.lugar; };
+  const nums=x=>[x.ot,x.nroRoster,x.nro].map(edpNro).filter(Boolean);
+  // 1) por N° de OR + patente  2) por patente + fecha
+  trs.forEach(x=>{ const c=byPat[edpPat(x.unidad)]; if(!c) return; const ns=nums(x); const z=c.find(z=>!usadas.has(z.k)&&ns.includes(z.o.nro)&&ok(z,x)); if(z){ usadas.add(z.k); out.set(x.id,z); } });
+  trs.forEach(x=>{ if(out.has(x.id)) return; const c=byPat[edpPat(x.unidad)]; if(!c||!x.fecha) return; const f=Date.parse(x.fecha); let best=null,bd=3.5*864e5;
+    c.forEach(z=>{ if(usadas.has(z.k)||!ok(z,x)) return; const d=Math.abs(Date.parse(z.o.fecha)-f); if(d<bd){ bd=d; best=z; } }); if(best){ usadas.add(best.k); out.set(x.id,best); } });
+  return out;
+}
+function edpIdx(){ const key=Object.values(S.edp||{}).map(e=>e.id+e.estado+e.tc).join()+'|'+Object.keys(S.trabajos).length+'|'+cfg('moneda'); if(EDPC&&EDPC.key===key) return EDPC.m; const m=edpMatch(Object.values(S.edp||{})); EDPC={key,m}; return m; }
+function factTr(x){
+  const z=edpIdx().get(x.id);
+  if(z&&!ocultarCostos()){ const mo=edpConv(z.e,z.o.mo), rp=edpConv(z.e,z.o.rep); if(z.e.estado==='aprobado') return {mo,rep:rp,edp:'aprobado'}; return {mo:num(x.moFact),rep:repFact(x),edp:'presentado',pend:mo+rp}; }
+  return {mo:num(x.moFact),rep:repFact(x),edp:null};
+}
+function edpTot(R){ const t={mina:{n:0,mo:0,rep:0},sede:{n:0,mo:0,rep:0}}; (R.ors||[]).forEach(o=>{ const q=t[o.lugar]; q.n++; q.mo+=o.mo; q.rep+=o.rep; }); return t; }
+function vEdp(){
+  const R=rep, oc=ocultarCostos(), T=edpTot(R), id='edp_'+R.mes, M=cfg('moneda');
+  const prosp=Object.assign({},R,{id}); const mt=edpMatch([prosp]); const m=mt.size, sin=R.ors.length-m;
+  const f=n=>fm(edpConv({tc:R.tc},n));
+  let h=`<div class="alert alert-info"><b>Estado de Pago${R.num?' N° '+esc(R.num):''}</b> · ${esc(R.name)}${R.op?'<br>OP '+esc(R.op):''}${R.desde?' · período '+fmtD(R.desde)+' al '+fmtD(R.hasta):''}<br>${R.pdf?'PDF: se registra solo el resumen del EDP. Para asignar los importes a cada trabajo cargá el Excel con la hoja "Detalle de OR".':R.ors.length+' órdenes de reparación leídas · '+m+' coinciden con trabajos cargados'+(sin?' · '+sin+' sin trabajo en la app':'')}</div>`;
+  h+=`<div class="frow2"><div class="fg"><label class="fl">Mes del EDP</label><input class="fi" type="month" value="${esc(R.mes)}" onchange="rep.mes=this.value;render()"></div><div class="fg"><label class="fl">Estado</label><select class="fs" onchange="rep.estado=this.value;render()"><option value="presentado" ${R.estado==='presentado'?'selected':''}>Presentado al cliente (pendiente de aprobación)</option><option value="aprobado" ${R.estado==='aprobado'?'selected':''}>Aprobado por el cliente (se factura)</option></select></div></div>`;
+  if(!R.pdf) h+=`<div class="fg"><label class="fl">Tipo de cambio ($ por USD)</label><input class="fi" type="number" step="any" inputmode="decimal" value="${R.tc||''}" onchange="rep.tc=num(this.value)||null;render()">${M==='USD'&&!R.tc?'<div class="note">Sin tipo de cambio no se pueden pasar los pesos a dólares: completalo.</div>':''}</div>`;
+  if(S.edp[id]) h+=`<div class="note"><b>Ya hay un EDP cargado de ${esc(R.mes)}: se reemplaza.</b></div>`;
+  if(!oc){
+    const rs=R.resumen||{}; const U=n=>n==null?'—':'U$S '+Math.round(n).toLocaleString('es-AR');
+    h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>Resumen del EDP (USD)</b><div class="ev-int">Servicio fijo mensual ${U(rs.servicio)} · Repuestos ${U(rs.repuestos)} · Reparación fuera de mina ${U(rs.reparacion)}<br>Total de valorización del período ${U(rs.total)}</div></div></div>`;
+    if(!R.pdf) ['mina','sede'].forEach(l=>{ if(!T[l].n) return; h+=`<div class="plan-row"><div class="plan-sys"><b>Taller ${l==='mina'?'Mina':'Sede San Juan'}</b><div class="ev-int">${T[l].n} OR · mano de obra ${f(T[l].mo)} · repuestos ${f(T[l].rep)} · total ${f(T[l].mo+T[l].rep)}</div></div></div>`; });
+    const cr=R.ctl||{}; if(!R.pdf&&R.tc&&cr.mo!=null){ const dm=Math.abs((T.mina.mo+T.sede.mo)/R.tc-cr.mo), dr=Math.abs((T.mina.rep/R.tc)-(cr.repMina||0))+Math.abs((T.sede.rep/R.tc)-(cr.repSede||0)); h+=`<div class="plan-row"><div class="plan-sys"><div class="ev-int">Control contra los totales del EDP: ${dm<2&&dr<2?'✔ coincide':'⚠ diferencia de U$S '+Math.round(dm+dr)}</div></div></div>`; }
+    h+=`</div>`;
+  }
+  if(!R.pdf) h+=`<div class="ev-list">${R.ors.slice(0,30).map(o=>{ const z=[...mt.values()].some(z=>z.o===o); return `<div class="ev-card"><div class="ev-stripe ${z?'sc-pm1':'sc-pm7'}"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(o.pat)} <span class="ev-int">OR ${esc(o.nro)}</span></div><div class="ev-date">${fmtDC(o.fecha)}</div></div><div class="ev-row2"><span class="ev-area">${o.lugar==='sede'?'Sede':'Mina'}</span><span class="badge ${z?'st-cumpl':''}">${z?'Coincide con trabajo':'Sin trabajo en la app'}</span></div>${oc?'':`<div class="ev-obs">MO ${f(o.mo)} · Rep. ${f(o.rep)}</div>`}</div></div>`; }).join('')}</div>${R.ors.length>30?`<div class="note">… y ${R.ors.length-30} más.</div>`:''}`;
+  h+=`<div class="btn-row wr" style="margin-top:10px;"><button class="btn-secondary" onclick="rep=null;render()">Cancelar</button><button class="btn-primary" onclick="aplicarEdp()">Guardar EDP</button></div><div class="note">Presentado: los importes quedan registrados como pendientes. Aprobado: pasan a ser lo facturado de cada trabajo (mano de obra y repuestos) en los KPI, la proyección y los informes.</div>`;
+  return h;
+}
+function aplicarEdp(){
+  const R=rep; if(!R||R.kind!=='edp') return;
+  if(!R.pdf&&cfg('moneda')==='USD'&&!(R.tc>0)){ toast('Completá el tipo de cambio'); return; }
+  const id='edp_'+R.mes;
+  put('edp',{id,mes:R.mes,estado:R.estado,tc:R.tc||null,archivo:R.name,num:R.num,op:R.op,desde:R.desde,hasta:R.hasta,resumen:R.resumen||{},ors:R.ors||[],pdf:!!R.pdf,creado:Date.now()});
+  rep=null; toast('EDP de '+R.mes+' guardado como '+(R.estado==='aprobado'?'aprobado':'presentado')); render();
+}
+function cambiarEdp(id,est){ const e=S.edp[id]; if(!e) return; put('edp',Object.assign({},e,{estado:est})); toast('EDP '+e.mes+': '+(est==='aprobado'?'aprobado, se toma como facturado':'presentado')); render(); }
+function delEdp(id){ if(!confirm('¿Quitar este EDP?')) return; del('edp',id); render(); }
+function vEdpEstado(){
+  const ids=Object.keys(S.edp||{}).sort().reverse(), oc=ocultarCostos();
+  let h=`<div class="sec-hdr">EDP cargados</div><div class="plan-card">`+(ids.length?'':`<div class="plan-row"><div class="plan-sys"><div class="ev-int">Todavía no hay EDP cargados.</div></div></div>`);
+  ids.forEach(id=>{ const e=S.edp[id], T=edpTot(e), m=edpMatch([e]).size, n=(e.ors||[]).length, f=x=>fm(edpConv(e,x));
+    h+=`<div class="plan-row"><div class="plan-sys">${esc(e.mes)}${e.num?' · EDP N° '+esc(e.num):''}<div class="ev-int">${e.pdf?'Solo resumen (PDF)':n+' OR · '+m+' con trabajo'}${oc||e.pdf?'':' · Mina '+f(T.mina.mo+T.mina.rep)+' · Sede '+f(T.sede.mo+T.sede.rep)}</div><select class="fs" ${soloLectura()?'disabled':''} onchange="cambiarEdp('${id}',this.value)"><option value="presentado" ${e.estado==='presentado'?'selected':''}>Presentado</option><option value="aprobado" ${e.estado==='aprobado'?'selected':''}>Aprobado (facturado)</option></select></div><button class="btn-secondary btn-sm" onclick="delEdp('${id}')">Quitar</button></div>`; });
+  return h+`</div>`;
 }
 
 /* ═══════════ SINCRONIZACIÓN AUTOMÁTICA DESDE FLOTA (sin carga manual) ═══════════ */
@@ -1530,7 +1652,7 @@ function buildTurnoReport(tid){
     ['Facturado en mano de obra ('+M+')',fm(k.mo)],['Facturado en repuestos ('+M+')',fm(k.rep)],['Total facturado en el turno ('+M+')',fm(k.fact)]]}}]});
   const tp=Object.keys(k.porTipo).sort();
   secs.push({h:'2. TRABAJOS POR TIPO DE REPARACIÓN',blocks:[tp.length?{table:{head:['Tipo de reparación','Programados','Imprevistos','Total'],widths:[3.4,1,1,0.8],rows:tp.map(n=>[n,k.porTipo[n].p,k.porTipo[n].i,k.porTipo[n].p+k.porTipo[n].i])}}:{p:'Sin trabajos cargados en el turno.'}]});
-  secs.push({h:'3. DETALLE DE TRABAJOS Y REPUESTOS UTILIZADOS',blocks:[tr.length?{table:{head:['Fecha','Unidad','OT','Condición','Reparación','Repuestos utilizados','MO','Rep.'],widths:[0.9,0.9,0.7,1,1.5,2.6,0.9,0.9],small:true,rows:tr.map(x=>[fmtDC(x.fecha),x.unidad,x.ot||'',x.condicion==='programado'?'Programado':'Imprevisto',x.reparacion||'',(x.repuestos||[]).map(r=>fnum(num(r.cant),2)+'x '+(r.desc||r.codigo||'')).join('; ')||'—',fm(num(x.moFact)),fm(repFact(x))])}}:{p:'Sin trabajos cargados en el turno.'}]});
+  secs.push({h:'3. DETALLE DE TRABAJOS Y REPUESTOS UTILIZADOS',blocks:[tr.length?{table:{head:['Fecha','Unidad','OT','Condición','Reparación','Repuestos utilizados','MO','Rep.'],widths:[0.9,0.9,0.7,1,1.5,2.6,0.9,0.9],small:true,rows:tr.map(x=>[fmtDC(x.fecha),x.unidad,x.ot||'',x.condicion==='programado'?'Programado':'Imprevisto',x.reparacion||'',(x.repuestos||[]).map(r=>fnum(num(r.cant),2)+'x '+(r.desc||r.codigo||'')).join('; ')||'—',fm(factTr(x).mo),fm(factTr(x).rep)])}}:{p:'Sin trabajos cargados en el turno.'}]});
   secs.push({h:'4. BACKLOGS REALIZADOS',blocks:[bl.length?{table:{head:['Fecha','Unidad','OT','Backlog realizado'],widths:[0.9,1,0.8,4],rows:bl.map(x=>[fmtDC(x.fecha),x.unidad,x.ot||'',x.descripcion||''])}}:{p:'Sin backlogs realizados en el turno.'}]});
   secs.push({h:'5. INSPECCIONES DE CONTROL DE CALIDAD',blocks:[qc.length?{table:{head:['Fecha','Unidad','OT','Resultado','Inspector','Observaciones'],widths:[0.9,1,0.8,1.3,1.4,2.2],rows:qc.map(x=>[fmtDC(x.fecha),x.unidad,x.ot||'',x.resultado||'',x.inspector||'',x.obs||''])}}:{p:'Sin inspecciones de calidad en el turno.'}]});
   secs.push({h:'6. OBSERVACIONES',blocks:[{p:t.obs||'[Completar manualmente]'}]});
@@ -1563,7 +1685,7 @@ function exportXlsx(que){
   if(que==='turno'){
     const t=turnoSel(), k=kpiTurno(t.id), tr=recs('trabajos',t.id);
     add('Resumen',[['FREDDY EL TALLER S.R.L. – Área Operaciones y Capacitación'],['Informe de productividad del turno'],['Supervisor',t.supervisor],['Turno',fmtD(t.inicio)+' al '+fmtD(t.fin)],[],['Indicador','Valor'],['Trabajos realizados',k.total],['Programados',k.prog],['Imprevistos',k.imprev],['Repuestos utilizados (unid.)',k.repUnid],['Backlogs realizados',k.backlogs],['Inspecciones QC realizadas',k.qcTotal],['QC conformes',k.qcOk],['QC con observaciones',k.qcObs],['QC no conformes',k.qcNok],['Facturado mano de obra ('+M+')',k.mo],['Facturado repuestos ('+M+')',k.rep],['Total facturado ('+M+')',k.fact]],[44,26]);
-    add('Trabajos',[['Fecha','Unidad','OT','Condición','Tipo de reparación','Descripción','Facturado MO','Facturado repuestos','Origen'],...tr.map(x=>[x.fecha,x.unidad,x.ot||'',x.condicion==='programado'?'Programado':'Imprevisto',x.reparacion||'',x.descripcion||'',num(x.moFact),repFact(x),x.origen||''])],[11,10,9,12,34,50,13,16,9]);
+    add('Trabajos',[['Fecha','Unidad','OT','Condición','Tipo de reparación','Descripción','Facturado MO','Facturado repuestos','Origen'],...tr.map(x=>[x.fecha,x.unidad,x.ot||'',x.condicion==='programado'?'Programado':'Imprevisto',x.reparacion||'',x.descripcion||'',factTr(x).mo,factTr(x).rep,x.origen||''])],[11,10,9,12,34,50,13,16,9]);
     const rp=[]; tr.forEach(x=>(x.repuestos||[]).forEach(r=>rp.push([x.fecha,x.unidad,x.ot||'',x.reparacion||'',r.codigo||'',r.desc||'',num(r.cant),r.precio!=null?num(r.precio):''])));
     add('Repuestos',[['Fecha','Unidad','OT','Tipo de reparación','Código','Repuesto','Cantidad','Precio unit.'],...rp],[11,10,9,34,14,44,10,12]);
     add('Backlogs',[['Fecha','Unidad','OT','Backlog realizado'],...recs('backlogs',t.id).map(x=>[x.fecha,x.unidad,x.ot||'',x.descripcion||''])],[11,10,9,70]);
@@ -1634,7 +1756,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v40</div>
+  <div class="note">Versión de la app: v41</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
