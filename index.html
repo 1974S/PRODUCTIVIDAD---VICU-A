@@ -296,9 +296,9 @@ function whenAuthReady(cb){ if(!window.firebase) return; const un=firebase.auth(
 const clean=o=>JSON.parse(JSON.stringify(o));
 
 /* ═══════════ ESTADO ═══════════ */
-const COLS=['turnos','trabajos','backlogs','qc','edp'];
+const COLS=['turnos','trabajos','backlogs','qc','edp','envios'];
 const LS='pv_data_v1';
-let S={turnos:{},trabajos:{},backlogs:{},qc:{},edp:{},config:{}};
+let S={turnos:{},trabajos:{},backlogs:{},qc:{},edp:{},envios:{},config:{}};
 try{ const r=JSON.parse(localStorage.getItem(LS)||'null'); if(r){ S=Object.assign(S,r); } }catch(e){}
 COLS.forEach(c=>{ if(!S[c]) S[c]={}; });
 if(!S.config) S.config={};
@@ -564,7 +564,7 @@ function proyeccion(mios,nom,etq){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v43</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v44</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -724,7 +724,7 @@ function vFlota(c){
       h+=`<div class="btn-row wr" style="margin-top:10px;"><button class="btn-secondary" onclick="selTodasOT()">Seleccionar todas</button><button class="btn-primary" onclick="importarOT()">Importar seleccionadas</button></div><div class="note">Importa a "Trabajos": PM = programado; el resto, imprevisto. Revisá el tipo de reparación después, se clasifica por palabras clave.</div>`;
     }
   }
-  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('⛏️','Importar OT valorizadas · Taller Mina (PDF)','.pdf',1,'hoja_mina')+btnCarga('🏢','Importar OT valorizadas · Taller Sede (PDF)','.pdf',1,'hoja_sede')+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+btnCarga('💲','Cargar lista de precios (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'lista')+btnCarga('📦','Cargar stock valorado (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'stock')+btnCarga('🧾','Cargar EDP del mes (Excel / PDF) y respaldo de órdenes firmadas (ZIP / fotos)','.xlsx,.xls,.pdf,.zip,.jpg,.jpeg,.png',1,'edp')+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+vPreciosEstado()+vEdpEstado()+`</div>`;
+  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('⛏️','Importar OT valorizadas · Taller Mina (PDF)','.pdf',1,'hoja_mina')+btnCarga('🏢','Importar OT valorizadas · Taller Sede (PDF)','.pdf',1,'hoja_sede')+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+btnCarga('💲','Cargar lista de precios (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'lista')+btnCarga('📦','Cargar stock valorado (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'stock')+btnCarga('🚚','Cargar envío de repuestos (remito: PDF / foto)','.pdf,.jpg,.jpeg,.png',1,'envio')+`<button style="${BTNC}" onclick="envioNuevo()">✍️ Cargar envío de repuestos a mano</button>`+btnCarga('🧾','Cargar EDP del mes (Excel / PDF) y respaldo de órdenes firmadas (ZIP / fotos)','.xlsx,.xls,.pdf,.zip,.jpg,.jpeg,.png',1,'edp')+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+vPreciosEstado()+vEdpEstado()+vEnviosEstado()+`</div>`;
   h+=`<div class="sec-hdr">Carga manual desde Excel / CSV</div><div class="wr">`+vImport()+`</div>`;
   c.innerHTML=h;
 }
@@ -890,7 +890,7 @@ function aplicarPar(t,o){
 }
 async function cargarInforme(fl,hint){
   const files=fl&&typeof fl.length==='number'&&!fl.name?[...fl]:(fl?[fl]:[]);
-  for(const f of files) await (/^hoja_/.test(hint||'')?cargarHojas(f,hint.slice(5)):hint==='edp'?cargarEdp(f):hint?cargarPrecios(f,hint):cargarUno(f));
+  for(const f of files) await (/^hoja_/.test(hint||'')?cargarHojas(f,hint.slice(5)):hint==='edp'?cargarEdp(f):hint==='envio'?cargarEnvio(f):hint?cargarPrecios(f,hint):cargarUno(f));
   render();
 }
 async function cargarPrecios(file,fuente){
@@ -996,6 +996,7 @@ function vInforme(){
   }
   if(rep.kind==='hojas') return vHojas();
   if(rep.kind==='edp') return vEdp();
+  if(rep.kind==='envio') return vEnvio();
   if(rep.kind==='edpresp') return vEdpResp();
   if(rep.kind==='mensual') return vMensual();
   if(rep.kind==='precios') return vPrecios();
@@ -1166,6 +1167,109 @@ function aplicarHojas(){
   rep=null; toast(P.pairs.length+' trabajo(s) completados con repuestos y costos'+(nc?' · '+nc+' creados':'')); render();
 }
 
+
+
+/* ═══════════ ENVÍOS DE REPUESTOS (remitos del depósito a la mina) ═══════════ */
+function loadTess(){ return window.Tesseract?Promise.resolve():loadScript('https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js'); }
+function cnvRot(c,deg){ const r=document.createElement('canvas'), q=deg%180!==0; r.width=q?c.height:c.width; r.height=q?c.width:c.height; const g=r.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,r.width,r.height); g.translate(r.width/2,r.height/2); g.rotate(deg*Math.PI/180); g.drawImage(c,-c.width/2,-c.height/2); return r; }
+function cnvEsc(c,max){ const k=Math.min(1,max/Math.max(c.width,c.height)); if(k>=1) return c; const r=document.createElement('canvas'); r.width=Math.round(c.width*k); r.height=Math.round(c.height*k); r.getContext('2d').drawImage(c,0,0,r.width,r.height); return r; }
+async function cnvDeArchivo(file){
+  if(/\.pdf$/i.test(file.name)){
+    if(!window.pdfjsLib){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
+    const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise; const pg=await pdf.getPage(1);
+    const vp0=pg.getViewport({scale:1}), k=2600/Math.max(vp0.width,vp0.height), vp=pg.getViewport({scale:k}); const c=document.createElement('canvas'); c.width=Math.round(vp.width); c.height=Math.round(vp.height);
+    await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise; return c;
+  }
+  const bmp=await createImageBitmap(new Blob([await file.arrayBuffer()]),{imageOrientation:'from-image'}); const c=document.createElement('canvas'); c.width=bmp.width; c.height=bmp.height; c.getContext('2d').drawImage(bmp,0,0); return cnvEsc(c,2600);
+}
+async function ocrRemito(file){
+  await loadTess(); let c=await cnvDeArchivo(file);
+  toast('Leyendo el remito (la primera vez descarga el reconocedor de texto)…');
+  const w=await Tesseract.createWorker('eng'); await w.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'});
+  try{
+    const score=async cv=>{ const tx=(await w.recognize(cnvEsc(cv,1100))).data.text; return (tx.match(/remito|codigo|c[oó]digo|descripci|cantidad|destino|fecha|observaciones|emisi/gi)||[]).length; };
+    let best=0,bs=await score(c);
+    if(bs<3){ for(const d of [90,270,180]){ const s=await score(cnvRot(c,d)); if(s>bs){ bs=s; best=d; } if(s>=5) break; } }
+    if(best) c=cnvRot(c,best);
+    return (await w.recognize(c)).data.text;
+  } finally { try{ await w.terminate(); }catch(e){} }
+}
+function parseRemito(tx){
+  const R={remito:'',comp:'',fecha:'',destino:'',obs:'',items:[]}; const L=String(tx||'').split(/\r?\n/).map(s=>s.replace(/\s+$/,''));
+  const all=L.join('\n'); let m;
+  if(m=all.match(/(\d{4})\s*[-–— ]\s*(\d{8})/)) R.remito=m[1]+'-'+m[2];
+  if(m=all.match(/Comp\.?[^0-9\n]{0,8}(\d{6,9})/i)) R.comp=m[1];
+  if(m=all.match(/Fecha:?\s*(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{2,4})/i)){ let y=m[3]; if(y.length===2) y='20'+y; R.fecha=y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'); }
+  if(m=all.match(/Destino:?[ \t]*([^\n]+)/i)) R.destino=m[1].replace(/[^\wÁÉÍÓÚÑáéíóúñ .\-]/g,'').trim();
+  if(/vicu|vicuna/i.test(R.destino)) R.destino='VICUÑA MINA'; else if(/velad|veladero/i.test(R.destino)) R.destino='MINA VELADERO';
+  if(m=all.match(/OBSERVACIONES:?[ \t]*([^\n]+)/i)) R.obs=m[1].replace(/\s+[^\w\s]{0,3}\s*\w{0,3}$/,'').trim();
+  L.forEach(l=>{
+    const s=l.replace(/[|_©¥»«~]/g,' ').replace(/\s+/g,' ').trim(); if(s.length<8||/remito|cuit|tel:|nextel|emisi|fecha|hora|sucursal|usuario|destino|observ|comp\.|codigo|descripci|cantidad|contrato|brutos|actividad|imprenta|c\.a\.i|escaneado|suc\.|inscripto|respons|ponram|\(va |www\.|@/i.test(s)) return;
+    let toks=s.split(' '); const isCod=x=>x.length>=4&&x.length<=13&&/^[0-9A-Z][0-9A-Z\-.]*$/i.test(x)&&(x.match(/\d/g)||[]).length>=3&&!/^\d{7,9}$/.test(x)||/^\d{4,6}$/.test(x);
+    let ci=-1; for(let i=0;i<Math.min(3,toks.length);i++){ if(isCod(toks[i])){ ci=i; break; } }
+    const cod=ci>=0?toks[ci].toUpperCase().replace(/\.$/,''):''; toks=toks.slice(ci>=0?ci+1:0); while(toks.length&&!ci<0&&false){}
+    if(ci<0) while(toks.length&&toks[0].length<=2) toks.shift();
+    let qi=-1,lastBig=-1; toks.forEach((tk,i)=>{ if(/^\d{6,9}$/.test(tk)) lastBig=i; });
+    if(lastBig>=0){ for(let i=lastBig+1;i<toks.length;i++){ if(/^\d{1,3}$/.test(toks[i])){ qi=i; break; } } }
+    if(qi<0){ for(let i=toks.length-1;i>=1;i--){ if(/^\d{1,3}$/.test(toks[i])){ qi=i; break; } } }
+    if(qi<2&&!(qi===1&&cod)) return; const cant=num(toks[qi]); if(!(cant>0)) return;
+    const desc=toks.slice(0,qi).join(' ').replace(/\s+/g,' ').trim(); const letras=desc.replace(/[^A-Za-zÁÉÍÓÚÑ]/g,''); if(letras.length<6||letras.replace(/[^A-ZÁÉÍÓÚÑ]/g,'').length<letras.length*0.5) return;
+    R.items.push({codigo:cod,desc,cant});
+  });
+  return R;
+}
+function catItem(r,fecha){
+  for(const f of ['stock','lista']){ const P=catalogoPara(fecha,f); if(!P||!P.items.length) continue; const ix=preIndex(P);
+    let it=(r.codigo&&ix.c[nkey(r.codigo)])||null; if(it) return {it,exacto:true};
+    it=ix.d[nkey(r.desc)]; if(it) return {it,exacto:false};
+    const w=new Set(nkey(r.desc).split(' ').filter(x=>x.length>2)); if(w.size){ let best=0,bi=null; ix.tk.forEach(([s,i])=>{ let c=0; w.forEach(x=>{ if(s.has(x)) c++; }); const j=c/(w.size+s.size-c); if(j>best){ best=j; bi=i; } }); if(best>=0.6) return {it:bi,exacto:false}; } }
+  return null;
+}
+function envioAjustar(R){ R.items.forEach(i=>{ const c=catItem(i,R.fecha); if(c&&!c.exacto&&c.it.c){ i.sug={codigo:c.it.c,desc:c.it.d}; } }); }
+async function cargarEnvio(file){
+  try{
+    if(!/\.(pdf|jpe?g|png)$/i.test(file.name)){ rep={kind:'aviso',name:file.name,msg:'El remito se carga como PDF o foto (JPG / PNG).'}; return; }
+    const tx=await ocrRemito(file); const R=parseRemito(tx);
+    rep=Object.assign(R,{kind:'envio',archivo:file.name,ocr:tx,id:'env_'+(R.remito||uid('e')).replace(/\W/g,''),nuevo:true});
+    if(!R.items.length) toast('No pude leer líneas de repuestos: cargalas a mano abajo'); envioAjustar(rep);
+  }catch(e){ rep=null; toast('No se pudo leer el remito: '+e.message); }
+}
+function envioNuevo(){ rep={kind:'envio',remito:'',comp:'',fecha:hoyISO(),destino:'VICUÑA MINA',obs:'',items:[{codigo:'',desc:'',cant:1}],archivo:'',ocr:'',id:'env_'+uid('e'),nuevo:true}; render(); }
+function envioEdit(i,f,v){ const x=rep.items[i]; if(!x) return; if(f==='cant') x.cant=num(v); else x[f]=f==='codigo'?String(v).toUpperCase().trim():String(v).trim(); delete x.sug; render(); }
+function envioSug(i){ const x=rep.items[i]; if(x&&x.sug){ x.codigo=x.sug.codigo; x.desc=x.sug.desc; delete x.sug; render(); } }
+function envioHead(f,v){ rep[f]=v; if(f==='remito'&&rep.nuevo){ rep.id='env_'+(v||uid('e')).replace(/\W/g,''); } if(f==='fecha') envioAjustar(rep); render(); }
+function envioValor(R){ let u=0,v=0,sin=0; (R.items||[]).forEach(i=>{ const c=num(i.cant); u+=c; const p=precioDe(i,R.fecha); if(p!=null&&p>0) v+=c*p; else sin++; }); return {u,v,sin}; }
+function vEnvio(){
+  const R=rep, oc=ocultarCostos(), V=envioValor(R), ya=S.envios[R.id]&&R.nuevo;
+  let h=`<div class="alert alert-info"><b>Envío de repuestos</b>${R.archivo?' · '+esc(R.archivo):''}<br>${R.ocr?'Lectura automática del remito: revisá cada línea (el reconocimiento de texto puede equivocarse en códigos y cantidades) y corregí antes de guardar.':'Carga manual.'}</div>`;
+  h+=`<div class="frow2"><div class="fg"><label class="fl">N° de remito</label><input class="fi" value="${esc(R.remito)}" placeholder="0001-00011206" onchange="envioHead('remito',this.value)"></div><div class="fg"><label class="fl">Fecha</label><input class="fi" type="date" value="${esc(R.fecha)}" onchange="envioHead('fecha',this.value)"></div></div>`;
+  h+=`<div class="frow2"><div class="fg"><label class="fl">Destino</label><input class="fi" list="envDest" value="${esc(R.destino)}" onchange="envioHead('destino',this.value)"><datalist id="envDest"><option value="VICUÑA MINA"><option value="MINA VELADERO"><option value="SEDE SAN JUAN"></datalist></div><div class="fg"><label class="fl">Observaciones / pedidos</label><input class="fi" value="${esc(R.obs)}" onchange="envioHead('obs',this.value)"></div></div>`;
+  if(ya) h+=`<div class="note"><b>Ya hay un envío con ese N° de remito: se reemplaza.</b></div>`;
+  h+=kitDatalistCat();
+  R.items.forEach((x,i)=>{ const c=catItem(x,R.fecha), p=precioDe(x,R.fecha); h+=`<div class="plan-card" style="display:block;margin-bottom:6px;"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;"><div style="width:130px;"><label class="fl">Código</label><input class="fi" value="${esc(x.codigo)}" onchange="envioEdit(${i},'codigo',this.value)"></div><div style="flex:1;min-width:200px;"><label class="fl">Descripción</label><input class="fi" list="kitDL" value="${esc(x.desc)}" onchange="envioEdit(${i},'desc',this.value.replace(/^.+? · /,''))"></div><div style="width:70px;"><label class="fl">Cant.</label><input class="fi" type="number" step="any" inputmode="decimal" value="${esc(x.cant)}" onchange="envioEdit(${i},'cant',this.value)"></div><button class="btn-secondary btn-sm" onclick="rep.items.splice(${i},1);render()">Quitar</button></div><div class="ev-int">${x.sug?`¿Será <b>${esc(x.sug.codigo)} · ${esc(x.sug.desc)}</b>? <a href="#" onclick="envioSug(${i});return false;">usar</a> · `:''}${oc?'':(p?'Valor unit. '+fm(p)+' · subtotal '+fm(p*num(x.cant)):'Sin precio en lista / stock')}${c&&c.exacto?' · ✔ código en catálogo':''}</div></div>`; });
+  h+=`<div class="btn-row"><button class="btn-secondary" onclick="rep.items.push({codigo:'',desc:'',cant:1});render()">+ Agregar línea</button></div>`;
+  h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>${R.items.length} línea(s) · ${fnum(V.u,0)} unidades</b>${oc?'':`<div class="ev-int">Valor del envío ${fm(V.v)}${V.sin?' · '+V.sin+' línea(s) sin precio (cargá la lista de precios o el stock del mes)':''}</div>`}</div></div></div>`;
+  if(R.ocr) h+=`<details style="margin:8px 0;"><summary class="note">Ver texto leído del remito</summary><pre style="white-space:pre-wrap;font-size:11px;">${esc(R.ocr)}</pre></details>`;
+  h+=`<div class="btn-row wr"><button class="btn-secondary" onclick="rep=null;render()">Cancelar</button><button class="btn-primary" onclick="aplicarEnvio()">Guardar envío</button></div>`;
+  return h;
+}
+function kitDatalistCat(){ return `<datalist id="kitDL">${kitCatalogo().map(s=>`<option value="${esc(s)}">`).join('')}</datalist>`; }
+function aplicarEnvio(){
+  const R=rep; if(!R||R.kind!=='envio') return; const items=R.items.filter(i=>(i.desc||i.codigo)&&num(i.cant)>0).map(i=>({codigo:i.codigo||'',desc:i.desc||i.codigo,cant:num(i.cant)}));
+  if(!items.length){ toast('Agregá al menos un repuesto'); return; } if(!R.fecha){ toast('Completá la fecha'); return; }
+  put('envios',{id:R.id,remito:R.remito,comp:R.comp||'',fecha:R.fecha,destino:R.destino,obs:R.obs,items,archivo:R.archivo||'',creado:Date.now()});
+  rep=null; toast('Envío guardado: '+items.length+' línea(s)'); render();
+}
+function editarEnvio(id){ const e=S.envios[id]; if(!e) return; rep=Object.assign(JSON.parse(JSON.stringify(e)),{kind:'envio',ocr:'',nuevo:false}); render(); window.scrollTo&&window.scrollTo(0,0); }
+function delEnvio(id){ if(!confirm('¿Quitar este envío de repuestos?')) return; del('envios',id); render(); }
+function vEnviosEstado(){
+  const ids=Object.keys(S.envios||{}).sort((a,b)=>(S.envios[b].fecha||'').localeCompare(S.envios[a].fecha||'')), oc=ocultarCostos();
+  let h=`<div class="sec-hdr">Envíos de repuestos cargados</div><div class="plan-card">`+(ids.length?'':`<div class="plan-row"><div class="plan-sys"><div class="ev-int">Todavía no hay envíos cargados.</div></div></div>`);
+  const mes={}; ids.forEach(id=>{ const e=S.envios[id], V=envioValor(e); const m=(e.fecha||'').slice(0,7); const o=(mes[m]=mes[m]||{n:0,u:0,v:0}); o.n++; o.u+=V.u; o.v+=V.v;
+    h+=`<div class="plan-row"><div class="plan-sys">${fmtD(e.fecha)} · Remito ${esc(e.remito||'s/n')}<div class="ev-int">${esc(e.destino||'')} · ${e.items.length} línea(s) · ${fnum(V.u,0)} u.${oc?'':' · '+fm(V.v)}${V.sin&&!oc?' ('+V.sin+' sin precio)':''}${e.obs?'<br>'+esc(e.obs):''}</div></div><button class="btn-secondary btn-sm" onclick="editarEnvio('${id}')">Ver / editar</button><button class="btn-secondary btn-sm" onclick="delEnvio('${id}')">Quitar</button></div>`; });
+  if(ids.length&&!oc) h+=`<div class="plan-row"><div class="plan-sys"><b>Total por mes</b><div class="ev-int">${Object.keys(mes).sort().reverse().map(m=>m+': '+mes[m].n+' envío(s) · '+fnum(mes[m].u,0)+' u. · '+fm(mes[m].v)).join('<br>')}</div></div></div>`;
+  return h+`</div>`;
+}
 
 /* ═══════════ EDP (Estado de Pago) ═══════════ */
 function isDt(d){ return Object.prototype.toString.call(d)==='[object Date]'&&!isNaN(d); }
@@ -1805,7 +1909,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v43</div>
+  <div class="note">Versión de la app: v44</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
