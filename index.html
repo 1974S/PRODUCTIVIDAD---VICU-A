@@ -565,7 +565,7 @@ function proyeccion(mios,nom,etq){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v51</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v52</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -725,7 +725,7 @@ function vFlota(c){
       h+=`<div class="btn-row wr" style="margin-top:10px;"><button class="btn-secondary" onclick="selTodasOT()">Seleccionar todas</button><button class="btn-primary" onclick="importarOT()">Importar seleccionadas</button></div><div class="note">Importa a "Trabajos": PM = programado; el resto, imprevisto. Revisá el tipo de reparación después, se clasifica por palabras clave.</div>`;
     }
   }
-  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('⛏️','Importar OT valorizadas · Taller Mina (PDF)','.pdf',1,'hoja_mina')+btnCarga('🏢','Importar OT valorizadas · Taller Sede (PDF)','.pdf',1,'hoja_sede')+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+btnCarga('💲','Cargar lista de precios (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'lista')+btnCarga('📦','Cargar stock valorado (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'stock')+btnCarga('📋','Cargar reporte de stock (cantidades, Excel)','.xlsx,.xls,.csv',0,'stockrep')+btnCarga('🚚','Cargar envío de repuestos (remito: PDF / foto)','.pdf,.jpg,.jpeg,.png',1,'envio')+`<button style="${BTNC}" onclick="envioNuevo()">✍️ Cargar envío de repuestos a mano</button>`+btnCarga('🧾','Cargar EDP del mes (Excel / PDF) y respaldo de órdenes firmadas (ZIP / fotos)','.xlsx,.xls,.pdf,.zip,.jpg,.jpeg,.png',1,'edp')+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+vPreciosEstado()+vEdpEstado()+vEnviosEstado()+vStockRepEstado()+`</div>`;
+  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('⛏️','Importar OT valorizadas · Taller Mina (PDF)','.pdf',1,'hoja_mina')+btnCarga('🏢','Importar OT valorizadas · Taller Sede (PDF)','.pdf',1,'hoja_sede')+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+btnCarga('💲','Cargar lista de precios (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'lista')+btnCarga('📦','Cargar stock valorado (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'stock')+SUP_NOMBRES.map(s=>btnCarga('🧰','Pedidos de repuestos · '+s+' (Excel / PDF / foto)','.xlsx,.xls,.csv,.pdf,.jpg,.jpeg,.png',1,'pedido_'+s)).join('')+`<button style="${BTNC}" onclick="pedidoNuevo('')">✍️ Cargar pedido de repuestos a mano</button>`+btnCarga('📋','Cargar reporte de stock (cantidades, Excel)','.xlsx,.xls,.csv',0,'stockrep')+btnCarga('🚚','Cargar envío de repuestos (remito: PDF / foto)','.pdf,.jpg,.jpeg,.png',1,'envio')+`<button style="${BTNC}" onclick="envioNuevo()">✍️ Cargar envío de repuestos a mano</button>`+btnCarga('🧾','Cargar EDP del mes (Excel / PDF) y respaldo de órdenes firmadas (ZIP / fotos)','.xlsx,.xls,.pdf,.zip,.jpg,.jpeg,.png',1,'edp')+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+vPreciosEstado()+vEdpEstado()+vEnviosEstado()+vPedidosEstado()+vStockRepEstado()+`</div>`;
   h+=`<div class="sec-hdr">Carga manual desde Excel / CSV</div><div class="wr">`+vImport()+`</div>`;
   c.innerHTML=h;
 }
@@ -891,7 +891,7 @@ function aplicarPar(t,o){
 }
 async function cargarInforme(fl,hint){
   const files=fl&&typeof fl.length==='number'&&!fl.name?[...fl]:(fl?[fl]:[]);
-  for(const f of files) await (/^hoja_/.test(hint||'')?cargarHojas(f,hint.slice(5)):hint==='edp'?cargarEdp(f):hint==='envio'?cargarEnvio(f):hint==='stockrep'?cargarStockRep(f):hint?cargarPrecios(f,hint):cargarUno(f));
+  for(const f of files) await (/^pedido_/.test(hint||'')?cargarPedido(f,hint.slice(7)):/^hoja_/.test(hint||'')?cargarHojas(f,hint.slice(5)):hint==='edp'?cargarEdp(f):hint==='envio'?cargarEnvio(f):hint==='stockrep'?cargarStockRep(f):hint?cargarPrecios(f,hint):cargarUno(f));
   render();
 }
 async function cargarPrecios(file,fuente){
@@ -998,6 +998,7 @@ function vInforme(){
   if(rep.kind==='hojas') return vHojas();
   if(rep.kind==='edp') return vEdp();
   if(rep.kind==='envio') return vEnvio();
+  if(rep.kind==='pedido') return vPedido();
   if(rep.kind==='stockrep') return vStockRep();
   if(rep.kind==='edpresp') return vEdpResp();
   if(rep.kind==='mensual') return vMensual();
@@ -1298,7 +1299,7 @@ function stkDatos(src,per){
   Object.values(S.envios||{}).forEach(e=>{ if(e.estado==='recibido') return; (e.items||[]).forEach(i=>{ const o=rowOf(i,e.fecha), c=num(i.cant), v=valor(i,e.fecha); o.tra+=c; o.traV+=v; T.traV+=v; }); });
   Object.values(S.trabajos).forEach(x=>{ if(!x.fecha||(per!=='todo'&&x.fecha.slice(0,7)!==per)) return; const tu=S.turnos[x.turnoId]; const sup=tu?tu.supervisor:'Sin supervisor';
     (x.repuestos||[]).forEach(r=>{ const o=rowOf(r,x.fecha), c=num(r.cant), v=valor(r,x.fecha); add(o,'cons',sup,c,v); const z=(T.cons[sup]=T.cons[sup]||{q:0,v:0}); z.q+=c; z.v+=v; }); });
-  Object.values(S.pedidos||{}).forEach(x=>{ if(!x.fecha||(per!=='todo'&&x.fecha.slice(0,7)!==per)) return; const r={desc:x.desc,cant:x.cant}; const o=rowOf(r,x.fecha), v=valor(r,x.fecha); add(o,'ped',x.sup,num(x.cant),v); const z=(T.ped[x.sup]=T.ped[x.sup]||{q:0,v:0}); z.q+=num(x.cant); z.v+=v; });
+  Object.values(S.pedidos||{}).forEach(x=>{ if(!x.fecha||(per!=='todo'&&x.fecha.slice(0,7)!==per)) return; const r={codigo:x.codigo||'',desc:x.desc,cant:x.cant}; const o=rowOf(r,x.fecha), v=valor(r,x.fecha); add(o,'ped',x.sup,num(x.cant),v); const z=(T.ped[x.sup]=T.ped[x.sup]||{q:0,v:0}); z.q+=num(x.cant); z.v+=v; });
   rows.forEach(o=>{ T.stkV+=o.stkV; });
   return {P,rows:[...rows.values()],T};
 }
@@ -1386,7 +1387,7 @@ function stockInfData(){
   const trRows=[], trEnv=envios.map(e=>{ let u=0,v=0; (e.items||[]).forEach(i=>{ const c=num(i.cant), pu=precioDe(i,e.fecha)||0; u+=c; v+=c*pu; trRows.push({e,i,c,pu,sub:c*pu}); }); return {e,u,v}; });
   const trT={u:trEnv.reduce((s,x)=>s+x.u,0),v:trEnv.reduce((s,x)=>s+x.v,0),sin:trRows.filter(r=>!(r.pu>0)).length};
   const ped=Object.values(S.pedidos||{}).filter(x=>(x.fecha||'').slice(0,7)===mes).sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  const bySup=SUP_NOMBRES.map(s=>{ const rows=ped.filter(x=>x.sup===s).map(x=>{ const pu=precioDe({desc:x.desc},x.fecha)||0; return {x,pu,sub:pu*num(x.cant)}; }); return {s,rows,n:rows.length,u:rows.reduce((a,r)=>a+num(r.x.cant),0),v:rows.reduce((a,r)=>a+r.sub,0),sin:rows.filter(r=>!(r.pu>0)).length}; });
+  const bySup=SUP_NOMBRES.map(s=>{ const rows=ped.filter(x=>x.sup===s).map(x=>{ const pu=precioDe({codigo:x.codigo||'',desc:x.desc},x.fecha)||0; return {x,pu,sub:pu*num(x.cant)}; }); return {s,rows,n:rows.length,u:rows.reduce((a,r)=>a+num(r.x.cant),0),v:rows.reduce((a,r)=>a+r.sub,0),sin:rows.filter(r=>!(r.pu>0)).length}; });
   const pT={n:bySup.reduce((s,x)=>s+x.n,0),u:bySup.reduce((s,x)=>s+x.u,0),v:bySup.reduce((s,x)=>s+x.v,0)};
   return {fuente:(fu.find(x=>x.v===src)||{}).l||'Sin stock cargado',hoy,mes,stock,sT,trRows,trEnv,trT,bySup,pT};
 }
@@ -1418,6 +1419,76 @@ function stockInfXlsx(){
   XLSX.writeFile(wb,'Informe_Stock_'+d.hoy+'.xlsx'); toast('Excel generado');
 }
 function botonesInfStock(){ return ocultarCostos()?'':`<div class="sec-hdr">Informe de stock</div><div class="plan-card"><div class="plan-row"><div class="plan-sys">Stock actual valorado, repuestos en tránsito valorados y pedidos del mes en curso de cada supervisor, con totales.</div></div></div><div class="btn-row"><button class="btn-primary" onclick="exportar('stock','docx')">Word</button><button class="btn-secondary" onclick="exportar('stock','pdf')">PDF</button></div>`; }
+
+
+/* ═══════════ PEDIDOS DE REPUESTOS POR SUPERVISOR ═══════════ */
+const loteDe=x=>x.lote||('pm_'+slug(x.sup)+'_'+x.fecha);
+function parseTablaPedido(aoa){
+  let hi=-1,m={};
+  for(let i=0;i<Math.min(aoa.length,60);i++){ const h=aoa[i].map(norm); const ds=h.findIndex(x=>RE_DESC.test(x)), ct=h.findIndex(x=>/^cant|^unid|^qty|pedid/.test(x)); if(ds>=0&&ct>=0&&ds!==ct){ hi=i; m={ds,ct,cod:h.findIndex(x=>/parte|codigo|^cod\b|sku/.test(x)),fe:h.findIndex(x=>/^fecha/.test(x)),pa:h.findIndex(x=>/patente|dominio|unidad|vehiculo/.test(x)),ot:h.findIndex(x=>/^ot\b|^n ?ot|orden/.test(x))}; break; } }
+  if(hi<0) return null;
+  const items=[]; aoa.slice(hi+1).forEach(r=>{ const d=String(r[m.ds]||'').trim(); const c=numAR(r[m.ct]); if(!d||!(c>0)) return;
+    const it={codigo:m.cod>=0?String(r[m.cod]||'').trim():'',desc:d,cant:c,patente:m.pa>=0?String(r[m.pa]||'').toUpperCase().replace(/[^A-Z0-9]/g,''):'',ot:m.ot>=0?String(r[m.ot]||'').trim():''};
+    if(m.fe>=0){ const f=r[m.fe]; const iso=(Object.prototype.toString.call(f)==='[object Date]'&&!isNaN(f))?new Date(f.getTime()+12*3600e3).toISOString().slice(0,10):toISO(String(f||'')); if(iso) it.fecha=iso; }
+    items.push(it); });
+  return items.length?items:null;
+}
+async function cargarPedido(file,sup){
+  try{
+    const ext=(file.name.split('.').pop()||'').toLowerCase(); let items=null, tx='';
+    if(['xlsx','xls','csv'].includes(ext)){
+      if(!window.XLSX) throw new Error('Librería Excel no disponible (sin conexión)');
+      const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array',cellDates:true});
+      for(const sn of wb.SheetNames){ items=parseTablaPedido(XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:''})); if(items) break; }
+    }else if(ext==='pdf'){
+      if(!window.pdfjsLib){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
+      const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise; const pages=[];
+      for(let p=1;p<=pdf.numPages;p++){ const tc=await (await pdf.getPage(p)).getTextContent(); pages.push(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]}))); }
+      if(esMensual(pages)){ rep={kind:'aviso',name:file.name,msg:'Este es el archivo mensual de backlogs y pedidos: cargalo con el botón "Cargar archivo mensual".'}; return; }
+      tx=pages.map(pg=>pdfLineas(pg).join('\n')).join('\n'); const R=parseRemito(tx); items=R.items.length?R.items:null;
+      if(!items) tx='';
+    }
+    if(!items&&['pdf','jpg','jpeg','png'].includes(ext)){ tx=await ocrRemito(file); const R=parseRemito(tx); items=R.items.length?R.items:null; if(items&&R.fecha) rep0={fecha:R.fecha,obs:R.obs}; }
+    const R0=tx?parseRemito(tx):{fecha:'',obs:''};
+    if(!items){ rep={kind:'aviso',name:file.name,msg:'No pude leer repuestos de este archivo. Probá con un Excel con columnas Descripción y Cantidad, o cargá el pedido a mano.'}; return; }
+    const fechas=[...new Set(items.map(i=>i.fecha).filter(Boolean))];
+    rep={kind:'pedido',sup,fecha:fechas.length===1?fechas[0]:(R0.fecha||hoyISO()),nro:'',obs:R0.obs||'',items:items.map(i=>({codigo:i.codigo||'',desc:i.desc,cant:i.cant,patente:i.patente||'',ot:i.ot||'',fecha:i.fecha||''})),archivo:file.name,ocr:tx,lote:'',nuevo:true};
+  }catch(e){ rep=null; toast('No se pudo leer el pedido: '+e.message); }
+}
+let rep0=null;
+function pedidoNuevo(sup){ rep={kind:'pedido',sup:sup||'',fecha:hoyISO(),nro:'',obs:'',items:[{codigo:'',desc:'',cant:1,patente:'',ot:'',fecha:''}],archivo:'',ocr:'',lote:'',nuevo:true}; render(); }
+function pedEdit(i,f,v){ const x=rep.items[i]; if(!x) return; if(f==='cant') x.cant=num(v); else if(f==='patente') x.patente=String(v).toUpperCase().replace(/[^A-Z0-9]/g,''); else x[f]=f==='codigo'?String(v).toUpperCase().trim():String(v).trim(); render(); }
+function vPedido(){
+  const R=rep, oc=ocultarCostos(); let u=0,v=0,sin=0; R.items.forEach(i=>{ const c=num(i.cant), p=precioDe(i,R.fecha)||0; u+=c; v+=c*p; if(!(p>0)) sin++; });
+  let h=`<div class="alert alert-info"><b>Pedido de repuestos</b>${R.archivo?' · '+esc(R.archivo):''}<br>${R.ocr?'Lectura automática del documento: revisá cada línea y corregí antes de guardar.':R.archivo?'Leído del archivo: revisá las líneas antes de guardar.':'Carga manual.'}</div>`;
+  h+=`<div class="frow2"><div class="fg"><label class="fl">Supervisor</label><select class="fs" onchange="rep.sup=this.value;render()"><option value="">— elegir —</option>${SUP_NOMBRES.map(n=>`<option ${R.sup===n?'selected':''}>${n}</option>`).join('')}</select></div><div class="fg"><label class="fl">Fecha del pedido</label><input class="fi" type="date" value="${esc(R.fecha)}" onchange="rep.fecha=this.value;render()"></div></div>`;
+  h+=`<div class="frow2"><div class="fg"><label class="fl">N° de pedido (opcional)</label><input class="fi" value="${esc(R.nro)}" onchange="rep.nro=this.value.trim()"></div><div class="fg"><label class="fl">Observaciones</label><input class="fi" value="${esc(R.obs)}" onchange="rep.obs=this.value.trim()"></div></div>`;
+  h+=kitDatalistCat();
+  R.items.forEach((x,i)=>{ const p=precioDe(x,R.fecha); h+=`<div class="plan-card" style="display:block;margin-bottom:6px;"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;"><div style="width:120px;"><label class="fl">Código</label><input class="fi" value="${esc(x.codigo)}" onchange="pedEdit(${i},'codigo',this.value)"></div><div style="flex:1;min-width:200px;"><label class="fl">Repuesto</label><input class="fi" list="kitDL" value="${esc(x.desc)}" onchange="pedEdit(${i},'desc',this.value.replace(/^.+? · /,''))"></div><div style="width:64px;"><label class="fl">Cant.</label><input class="fi" type="number" step="any" inputmode="decimal" value="${esc(x.cant)}" onchange="pedEdit(${i},'cant',this.value)"></div><div style="width:100px;"><label class="fl">Patente</label><input class="fi" list="patList" value="${esc(x.patente)}" onchange="pedEdit(${i},'patente',this.value)"></div><div style="width:80px;"><label class="fl">OT</label><input class="fi" value="${esc(x.ot)}" onchange="pedEdit(${i},'ot',this.value)"></div><button class="btn-secondary btn-sm" onclick="rep.items.splice(${i},1);render()">Quitar</button></div>${oc?'':`<div class="ev-int">${p?'Valor unit. '+fm(p)+' · subtotal '+fm(p*num(x.cant)):'Sin precio en lista / stock'}</div>`}</div>`; });
+  h+=`<div class="btn-row"><button class="btn-secondary" onclick="rep.items.push({codigo:'',desc:'',cant:1,patente:'',ot:'',fecha:''});render()">+ Agregar repuesto</button></div>`;
+  h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>${R.items.length} línea(s) · ${fnum(u,0)} unidades</b>${oc?'':`<div class="ev-int">Valor del pedido ${fm(v)}${sin?' · '+sin+' línea(s) sin precio':''}</div>`}</div></div></div>`;
+  if(R.ocr) h+=`<details style="margin:8px 0;"><summary class="note">Ver texto leído</summary><pre style="white-space:pre-wrap;font-size:11px;">${esc(R.ocr)}</pre></details>`;
+  h+=`<div class="btn-row wr"><button class="btn-secondary" onclick="rep=null;render()">Cancelar</button><button class="btn-primary" onclick="aplicarPedido()">Guardar pedido</button></div>`;
+  return h;
+}
+function aplicarPedido(){
+  const R=rep; if(!R||R.kind!=='pedido') return; if(!R.sup){ toast('Elegí el supervisor'); return; } if(!R.fecha){ toast('Completá la fecha'); return; }
+  const items=R.items.filter(i=>(i.desc||i.codigo)&&num(i.cant)>0); if(!items.length){ toast('Agregá al menos un repuesto'); return; }
+  const lote=R.lote||('pl_'+slug(R.sup)+'_'+R.fecha+'_'+(R.nro?slug(R.nro):Date.now().toString(36)));
+  Object.values(S.pedidos).filter(x=>loteDe(x)===lote).forEach(x=>del('pedidos',x.id));
+  items.forEach((i,k)=>put('pedidos',{id:lote+'_'+k,lote,sup:R.sup,fecha:i.fecha||R.fecha,nro:R.nro||'',obs:R.obs||'',codigo:i.codigo||'',desc:i.desc||i.codigo,cant:num(i.cant),patente:i.patente||'',ot:i.ot||'',archivo:R.archivo||'',creado:Date.now()}));
+  rep=null; toast('Pedido guardado: '+items.length+' línea(s) de '+R.sup); render();
+}
+function editarPedido(lote){ const xs=Object.values(S.pedidos).filter(x=>loteDe(x)===lote); if(!xs.length) return; const a=xs[0]; rep={kind:'pedido',sup:a.sup,fecha:a.fecha,nro:a.nro||'',obs:a.obs||'',items:xs.map(x=>({codigo:x.codigo||'',desc:x.desc,cant:x.cant,patente:x.patente||'',ot:x.ot||'',fecha:x.fecha!==a.fecha?x.fecha:''})),archivo:a.archivo||'',ocr:'',lote,nuevo:false}; render(); window.scrollTo&&window.scrollTo(0,0); }
+function delPedido(lote){ if(!confirm('¿Quitar este pedido de repuestos?')) return; Object.values(S.pedidos).filter(x=>loteDe(x)===lote).forEach(x=>del('pedidos',x.id)); render(); }
+function vPedidosEstado(){
+  const g={}; Object.values(S.pedidos||{}).forEach(x=>{ const k=loteDe(x); (g[k]=g[k]||[]).push(x); });
+  const ks=Object.keys(g).sort((a,b)=>g[b][0].fecha.localeCompare(g[a][0].fecha)||g[a][0].sup.localeCompare(g[b][0].sup)), oc=ocultarCostos();
+  let h=`<div class="sec-hdr">Pedidos de repuestos cargados</div><div class="plan-card">`+(ks.length?'':`<div class="plan-row"><div class="plan-sys"><div class="ev-int">Todavía no hay pedidos cargados.</div></div></div>`);
+  ks.slice(0,60).forEach(k=>{ const xs=g[k], a=xs[0]; const u=xs.reduce((s,x)=>s+num(x.cant),0), v=xs.reduce((s,x)=>s+num(x.cant)*(precioDe({codigo:x.codigo||'',desc:x.desc},x.fecha)||0),0);
+    h+=`<div class="plan-row"><div class="plan-sys"><b>${esc(a.sup)}</b> · ${fmtD(a.fecha)}${a.nro?' · Pedido '+esc(a.nro):''}<div class="ev-int">${xs.length} línea(s) · ${fnum(u,0)} u.${oc?'':' · '+fm(v)}</div></div><button class="btn-secondary btn-sm" onclick="editarPedido('${k}')">Ver / editar</button><button class="btn-secondary btn-sm" onclick="delPedido('${k}')">Quitar</button></div>`; });
+  return h+(ks.length>60?`<div class="note">… y ${ks.length-60} más.</div>`:'')+`</div>`;
+}
 
 /* ═══════════ EDP (Estado de Pago) ═══════════ */
 function isDt(d){ return Object.prototype.toString.call(d)==='[object Date]'&&!isNaN(d); }
@@ -2076,7 +2147,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v51</div>
+  <div class="note">Versión de la app: v52</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
