@@ -565,7 +565,7 @@ function proyeccion(mios,nom,etq){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v53</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v54</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -891,7 +891,7 @@ function aplicarPar(t,o){
 }
 async function cargarInforme(fl,hint){
   const files=fl&&typeof fl.length==='number'&&!fl.name?[...fl]:(fl?[fl]:[]);
-  for(const f of files) await (/^pedido_/.test(hint||'')?cargarPedido(f,hint.slice(7)):/^hoja_/.test(hint||'')?cargarHojas(f,hint.slice(5)):hint==='edp'?cargarEdp(f):hint==='envio'?cargarEnvio(f):hint==='stockrep'?cargarStockRep(f):hint?cargarPrecios(f,hint):cargarUno(f));
+  for(const f of files) await (/^pedido_/.test(hint||'')?(f===files[0]?cargarPedidos(files,hint.slice(7)):0):/^hoja_/.test(hint||'')?cargarHojas(f,hint.slice(5)):hint==='edp'?cargarEdp(f):hint==='envio'?cargarEnvio(f):hint==='stockrep'?cargarStockRep(f):hint?cargarPrecios(f,hint):cargarUno(f));
   render();
 }
 async function cargarPrecios(file,fuente){
@@ -999,6 +999,7 @@ function vInforme(){
   if(rep.kind==='edp') return vEdp();
   if(rep.kind==='envio') return vEnvio();
   if(rep.kind==='pedido') return vPedido();
+  if(rep.kind==='pedidos') return vPedidos();
   if(rep.kind==='stockrep') return vStockRep();
   if(rep.kind==='edpresp') return vEdpResp();
   if(rep.kind==='mensual') return vMensual();
@@ -1440,7 +1441,17 @@ function parsePedidoMeta(aoa){
   m=txt.match(/SUP:?\s*([^\n]+)/i); if(m) M.sup=supDeTexto(m[1]);
   return M;
 }
-async function cargarPedido(file,sup){
+const PR=()=>rep.kind==='pedidos'?rep.list[rep.edit]:rep;
+const pedFirma=(fecha,items)=>fecha+'|'+items.filter(i=>(i.desc||i.codigo)&&num(i.cant)>0).map(i=>nkey(i.codigo||i.desc)+':'+num(i.cant)).sort().join(',');
+const pedLoteDe=P=>'pl_'+slug(P.sup||'sin')+'_'+P.fecha+'_'+(P.nro?slug(P.nro):'x');
+function pedidosGuardados(){ const g={}; Object.values(S.pedidos||{}).forEach(x=>{ const k=loteDe(x); (g[k]=g[k]||{lote:k,sup:x.sup,fecha:x.fecha,nro:x.nro||'',items:[]}).items.push(x); }); return Object.values(g).map(o=>Object.assign(o,{firma:pedFirma(o.fecha,o.items.map(x=>({codigo:x.codigo,desc:x.desc,cant:x.cant})))})); }
+function pedEstado(P,previos){ // 'nuevo' | 'ya' (ya cargado) | 'rep' (repetido en esta carga)
+  const firma=pedFirma(P.fecha,P.items), lote=pedLoteDe(P), gs=pedidosGuardados();
+  const ya=gs.find(g=>g.firma===firma||(P.nro&&g.nro===P.nro&&g.sup===P.sup&&g.fecha===P.fecha)||(P.lote&&g.lote===P.lote&&false));
+  if(previos&&previos.some(q=>pedFirma(q.fecha,q.items)===firma||(P.nro&&q.nro===P.nro&&q.sup===P.sup&&q.fecha===P.fecha))) return {s:'rep'};
+  return ya?{s:'ya',g:ya}:{s:'nuevo'};
+}
+async function cargarPedido(file,sup){ // devuelve {ped} o {err}
   try{
     const ext=(file.name.split('.').pop()||'').toLowerCase(); let items=null, tx='', meta={nro:'',fecha:'',sup:''};
     if(['xlsx','xls','csv'].includes(ext)){
@@ -1451,42 +1462,69 @@ async function cargarPedido(file,sup){
       if(!window.pdfjsLib){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
       const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise; const pages=[];
       for(let p=1;p<=pdf.numPages;p++){ const tc=await (await pdf.getPage(p)).getTextContent(); pages.push(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]}))); }
-      if(esMensual(pages)){ rep={kind:'aviso',name:file.name,msg:'Este es el archivo mensual de backlogs y pedidos: cargalo con el botón "Cargar archivo mensual".'}; return; }
-      tx=pages.map(pg=>pdfLineas(pg).join('\n')).join('\n'); const R=parseRemito(tx); items=R.items.length?R.items:null;
-      if(!items) tx='';
-    }
-    if(!items&&['pdf','jpg','jpeg','png'].includes(ext)){ tx=await ocrRemito(file); const R=parseRemito(tx); items=R.items.length?R.items:null; if(items&&R.fecha) rep0={fecha:R.fecha,obs:R.obs}; }
+      if(esMensual(pages)) return {err:file.name+': es el archivo mensual de backlogs y pedidos; cargalo con el botón "Cargar archivo mensual".'};
+      tx=pages.map(pg=>pdfLineas(pg).join('\n')).join('\n'); const R=parseRemito(tx); items=R.items.length?R.items:null; if(!items) tx='';
+    }else if(!['jpg','jpeg','png'].includes(ext)) return {err:file.name+': formato no admitido (usá Excel, PDF o foto).'};
+    if(!items&&['pdf','jpg','jpeg','png'].includes(ext)){ tx=await ocrRemito(file); const R=parseRemito(tx); items=R.items.length?R.items:null; }
     const R0=tx?parseRemito(tx):{fecha:'',obs:''};
-    if(!items){ rep={kind:'aviso',name:file.name,msg:'No pude leer repuestos de este archivo. Probá con un Excel con columnas Descripción y Cantidad, o cargá el pedido a mano.'}; return; }
+    if(!items) return {err:file.name+': no pude leer repuestos. Probá con un Excel con columnas Descripción y Cantidad (o Pedir), o cargalo a mano.'};
     const fechas=[...new Set(items.map(i=>i.fecha).filter(Boolean))];
-    rep={kind:'pedido',sup:meta.sup||sup,fecha:meta.fecha||(fechas.length===1?fechas[0]:(R0.fecha||hoyISO())),nro:meta.nro||'',obs:R0.obs||'',items:items.map(i=>({codigo:i.codigo||'',desc:i.desc,cant:i.cant,patente:i.patente||'',ot:i.ot||'',fecha:i.fecha||''})),archivo:file.name,ocr:tx,lote:'',nuevo:true};
-  }catch(e){ rep=null; toast('No se pudo leer el pedido: '+e.message); }
+    return {ped:{sup:meta.sup||sup,fecha:meta.fecha||(fechas.length===1?fechas[0]:(R0.fecha||hoyISO())),nro:meta.nro||'',obs:R0.obs||'',items:items.map(i=>({codigo:i.codigo||'',desc:i.desc,cant:i.cant,patente:i.patente||'',ot:i.ot||'',fecha:i.fecha||''})),archivo:file.name,ocr:tx,lote:''}};
+  }catch(e){ return {err:file.name+': '+e.message}; }
 }
-let rep0=null;
+async function cargarPedidos(files,sup){
+  const list=[], errs=[];
+  for(const f of files){ toast('Leyendo '+f.name+'…'); const r=await cargarPedido(f,sup); if(r.ped){ const e=pedEstado(r.ped,list); r.ped.estado=e.s; r.ped.incluir=e.s==='nuevo'; r.ped.viejo=e.g?e.g.lote:''; list.push(r.ped); } else errs.push(r.err); }
+  if(!list.length){ rep={kind:'aviso',name:'Pedidos de repuestos',msg:errs.join(' · ')||'No se pudo leer ningún archivo.'}; return; }
+  rep={kind:'pedidos',list,errs,edit:null};
+}
 function pedidoNuevo(sup){ rep={kind:'pedido',sup:sup||'',fecha:hoyISO(),nro:'',obs:'',items:[{codigo:'',desc:'',cant:1,patente:'',ot:'',fecha:''}],archivo:'',ocr:'',lote:'',nuevo:true}; render(); }
-function pedEdit(i,f,v){ const x=rep.items[i]; if(!x) return; if(f==='cant') x.cant=num(v); else if(f==='patente') x.patente=String(v).toUpperCase().replace(/[^A-Z0-9]/g,''); else x[f]=f==='codigo'?String(v).toUpperCase().trim():String(v).trim(); render(); }
+function pedEdit(i,f,v){ const x=PR().items[i]; if(!x) return; if(f==='cant') x.cant=num(v); else if(f==='patente') x.patente=String(v).toUpperCase().replace(/[^A-Z0-9]/g,''); else x[f]=f==='codigo'?String(v).toUpperCase().trim():String(v).trim(); render(); }
+function pedHead(f,v){ PR()[f]=v; render(); }
 function vPedido(){
-  const R=rep, oc=ocultarCostos(); let u=0,v=0,sin=0; R.items.forEach(i=>{ const c=num(i.cant), p=precioDe(i,R.fecha)||0; u+=c; v+=c*p; if(!(p>0)) sin++; });
+  const R=PR(), oc=ocultarCostos(), lote=rep.kind==='pedidos'; let u=0,v=0,sin=0; R.items.forEach(i=>{ const c=num(i.cant), p=precioDe(i,R.fecha)||0; u+=c; v+=c*p; if(!(p>0)) sin++; });
   let h=`<div class="alert alert-info"><b>Pedido de repuestos</b>${R.archivo?' · '+esc(R.archivo):''}<br>${R.ocr?'Lectura automática del documento: revisá cada línea y corregí antes de guardar.':R.archivo?'Leído del archivo: revisá las líneas antes de guardar.':'Carga manual.'}</div>`;
-  h+=`<div class="frow2"><div class="fg"><label class="fl">Supervisor</label><select class="fs" onchange="rep.sup=this.value;render()"><option value="">— elegir —</option>${SUP_NOMBRES.map(n=>`<option ${R.sup===n?'selected':''}>${n}</option>`).join('')}</select></div><div class="fg"><label class="fl">Fecha del pedido</label><input class="fi" type="date" value="${esc(R.fecha)}" onchange="rep.fecha=this.value;render()"></div></div>`;
-  h+=`<div class="frow2"><div class="fg"><label class="fl">N° de pedido (opcional)</label><input class="fi" value="${esc(R.nro)}" onchange="rep.nro=this.value.trim()"></div><div class="fg"><label class="fl">Observaciones</label><input class="fi" value="${esc(R.obs)}" onchange="rep.obs=this.value.trim()"></div></div>`;
+  h+=`<div class="frow2"><div class="fg"><label class="fl">Supervisor</label><select class="fs" onchange="pedHead('sup',this.value)"><option value="">— elegir —</option>${SUP_NOMBRES.map(n=>`<option ${R.sup===n?'selected':''}>${n}</option>`).join('')}</select></div><div class="fg"><label class="fl">Fecha del pedido</label><input class="fi" type="date" value="${esc(R.fecha)}" onchange="pedHead('fecha',this.value)"></div></div>`;
+  h+=`<div class="frow2"><div class="fg"><label class="fl">N° de pedido (opcional)</label><input class="fi" value="${esc(R.nro)}" onchange="PR().nro=this.value.trim()"></div><div class="fg"><label class="fl">Observaciones</label><input class="fi" value="${esc(R.obs)}" onchange="PR().obs=this.value.trim()"></div></div>`;
   h+=kitDatalistCat();
-  R.items.forEach((x,i)=>{ const p=precioDe(x,R.fecha); h+=`<div class="plan-card" style="display:block;margin-bottom:6px;"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;"><div style="width:120px;"><label class="fl">Código</label><input class="fi" value="${esc(x.codigo)}" onchange="pedEdit(${i},'codigo',this.value)"></div><div style="flex:1;min-width:200px;"><label class="fl">Repuesto</label><input class="fi" list="kitDL" value="${esc(x.desc)}" onchange="pedEdit(${i},'desc',this.value.replace(/^.+? · /,''))"></div><div style="width:64px;"><label class="fl">Cant.</label><input class="fi" type="number" step="any" inputmode="decimal" value="${esc(x.cant)}" onchange="pedEdit(${i},'cant',this.value)"></div><div style="width:100px;"><label class="fl">Patente</label><input class="fi" list="patList" value="${esc(x.patente)}" onchange="pedEdit(${i},'patente',this.value)"></div><div style="width:80px;"><label class="fl">OT</label><input class="fi" value="${esc(x.ot)}" onchange="pedEdit(${i},'ot',this.value)"></div><button class="btn-secondary btn-sm" onclick="rep.items.splice(${i},1);render()">Quitar</button></div>${oc?'':`<div class="ev-int">${p?'Valor unit. '+fm(p)+' · subtotal '+fm(p*num(x.cant)):'Sin precio en lista / stock'}</div>`}</div>`; });
-  h+=`<div class="btn-row"><button class="btn-secondary" onclick="rep.items.push({codigo:'',desc:'',cant:1,patente:'',ot:'',fecha:''});render()">+ Agregar repuesto</button></div>`;
+  R.items.forEach((x,i)=>{ const p=precioDe(x,R.fecha); h+=`<div class="plan-card" style="display:block;margin-bottom:6px;"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;"><div style="width:120px;"><label class="fl">Código</label><input class="fi" value="${esc(x.codigo)}" onchange="pedEdit(${i},'codigo',this.value)"></div><div style="flex:1;min-width:200px;"><label class="fl">Repuesto</label><input class="fi" list="kitDL" value="${esc(x.desc)}" onchange="pedEdit(${i},'desc',this.value.replace(/^.+? · /,''))"></div><div style="width:64px;"><label class="fl">Cant.</label><input class="fi" type="number" step="any" inputmode="decimal" value="${esc(x.cant)}" onchange="pedEdit(${i},'cant',this.value)"></div><div style="width:100px;"><label class="fl">Patente</label><input class="fi" list="patList" value="${esc(x.patente)}" onchange="pedEdit(${i},'patente',this.value)"></div><div style="width:80px;"><label class="fl">OT</label><input class="fi" value="${esc(x.ot)}" onchange="pedEdit(${i},'ot',this.value)"></div><button class="btn-secondary btn-sm" onclick="PR().items.splice(${i},1);render()">Quitar</button></div>${oc?'':`<div class="ev-int">${p?'Valor unit. '+fm(p)+' · subtotal '+fm(p*num(x.cant)):'Sin precio en lista / stock'}</div>`}</div>`; });
+  h+=`<div class="btn-row"><button class="btn-secondary" onclick="PR().items.push({codigo:'',desc:'',cant:1,patente:'',ot:'',fecha:''});render()">+ Agregar repuesto</button></div>`;
   h+=`<div class="plan-card"><div class="plan-row"><div class="plan-sys"><b>${R.items.length} línea(s) · ${fnum(u,0)} unidades</b>${oc?'':`<div class="ev-int">Valor del pedido ${fm(v)}${sin?' · '+sin+' línea(s) sin precio':''}</div>`}</div></div></div>`;
   if(R.ocr) h+=`<details style="margin:8px 0;"><summary class="note">Ver texto leído</summary><pre style="white-space:pre-wrap;font-size:11px;">${esc(R.ocr)}</pre></details>`;
-  h+=`<div class="btn-row wr"><button class="btn-secondary" onclick="rep=null;render()">Cancelar</button><button class="btn-primary" onclick="aplicarPedido()">Guardar pedido</button></div>`;
+  h+=lote?`<div class="btn-row wr"><button class="btn-primary" onclick="rep.edit=null;render()">Listo, volver a la lista</button></div>`:`<div class="btn-row wr"><button class="btn-secondary" onclick="rep=null;render()">Cancelar</button><button class="btn-primary" onclick="aplicarPedido()">Guardar pedido</button></div>`;
   return h;
+}
+function vPedidos(){
+  const R=rep; if(R.edit!=null) return vPedido(); const oc=ocultarCostos();
+  const inc=R.list.filter(p=>p.incluir), nDup=R.list.filter(p=>p.estado!=='nuevo').length;
+  let h=`<div class="alert alert-info"><b>Pedidos de repuestos</b> · ${R.list.length} archivo(s) leído(s)<br>${inc.length} para guardar${nDup?' · '+nDup+' repetido(s) (ya cargado o duplicado en esta carga)':''}${R.errs.length?'<br>⚠ '+R.errs.map(esc).join('<br>⚠ '):''}</div>`;
+  R.list.forEach((p,i)=>{ let u=0,v=0; p.items.forEach(x=>{ u+=num(x.cant); v+=num(x.cant)*(precioDe(x,p.fecha)||0); });
+    const b=p.estado==='nuevo'?'<span class="badge st-cumpl">Nuevo</span>':p.estado==='ya'?'<span class="badge pm7">Ya cargado</span>':'<span class="badge pm7">Repetido en esta carga</span>';
+    h+=`<div class="plan-card" style="display:block;margin-bottom:8px;"><div class="plan-row"><div class="plan-sys"><b>${esc(p.sup||'— sin supervisor —')}</b> · ${fmtD(p.fecha)}${p.nro?' · Pedido '+esc(p.nro):''} ${b}<div class="ev-int">${esc(p.archivo)} · ${p.items.length} línea(s) · ${fnum(u,0)} u.${oc?'':' · '+fm(v)}</div></div></div>
+    <label class="chk-row" style="display:flex;gap:8px;align-items:center;margin:6px 0;"><input type="checkbox" class="chk" ${p.incluir?'checked':''} onchange="rep.list[${i}].incluir=this.checked;render()"> ${p.estado==='nuevo'?'Guardar este pedido':p.estado==='ya'?'Guardar igual (reemplaza el pedido ya cargado)':'Guardar igual (queda duplicado)'}</label>
+    <div class="btn-row"><button class="btn-secondary btn-sm" onclick="rep.edit=${i};render()">Revisar / editar</button><button class="btn-secondary btn-sm" onclick="rep.list.splice(${i},1);if(!rep.list.length)rep=null;render()">Descartar</button></div></div>`; });
+  h+=`<div class="btn-row wr"><button class="btn-secondary" onclick="rep=null;render()">Cancelar</button><button class="btn-primary" onclick="aplicarPedidos()">Guardar ${inc.length} pedido(s)</button></div><div class="note">Podés elegir varios archivos a la vez. Los pedidos que ya estaban cargados (mismo supervisor, fecha y número, o mismo contenido) o repetidos dentro de la carga quedan sin tildar para no duplicarlos.</div>`;
+  return h;
+}
+function guardarPedido(R){
+  const items=R.items.filter(i=>(i.desc||i.codigo)&&num(i.cant)>0); const lote=R.lote||pedLoteDe(R)+(R.nro?'':'_'+Date.now().toString(36));
+  const viejos=new Set([lote,R.viejo].filter(Boolean)); Object.values(S.pedidos).filter(x=>viejos.has(loteDe(x))).forEach(x=>del('pedidos',x.id));
+  items.forEach((i,k)=>put('pedidos',{id:lote+'_'+k,lote,sup:R.sup,fecha:i.fecha||R.fecha,nro:R.nro||'',obs:R.obs||'',codigo:i.codigo||'',desc:i.desc||i.codigo,cant:num(i.cant),patente:i.patente||'',ot:i.ot||'',archivo:R.archivo||'',creado:Date.now()}));
+  return items.length;
+}
+function aplicarPedidos(){
+  const R=rep; if(!R||R.kind!=='pedidos') return; const inc=R.list.filter(p=>p.incluir);
+  const mal=inc.find(p=>!p.sup||!p.fecha||!p.items.some(i=>(i.desc||i.codigo)&&num(i.cant)>0)); if(mal){ toast('Falta supervisor, fecha o repuestos en: '+mal.archivo); return; }
+  if(!inc.length){ toast('No hay pedidos tildados para guardar'); return; }
+  let n=0; inc.forEach(p=>{ n+=guardarPedido(p); }); rep=null; toast(inc.length+' pedido(s) guardados · '+n+' línea(s)'); render();
 }
 function aplicarPedido(){
   const R=rep; if(!R||R.kind!=='pedido') return; if(!R.sup){ toast('Elegí el supervisor'); return; } if(!R.fecha){ toast('Completá la fecha'); return; }
   const items=R.items.filter(i=>(i.desc||i.codigo)&&num(i.cant)>0); if(!items.length){ toast('Agregá al menos un repuesto'); return; }
-  const lote=R.lote||('pl_'+slug(R.sup)+'_'+R.fecha+'_'+(R.nro?slug(R.nro):Date.now().toString(36)));
-  Object.values(S.pedidos).filter(x=>loteDe(x)===lote).forEach(x=>del('pedidos',x.id));
-  items.forEach((i,k)=>put('pedidos',{id:lote+'_'+k,lote,sup:R.sup,fecha:i.fecha||R.fecha,nro:R.nro||'',obs:R.obs||'',codigo:i.codigo||'',desc:i.desc||i.codigo,cant:num(i.cant),patente:i.patente||'',ot:i.ot||'',archivo:R.archivo||'',creado:Date.now()}));
-  rep=null; toast('Pedido guardado: '+items.length+' línea(s) de '+R.sup); render();
+  if(R.nuevo){ const e=pedEstado(R,null); if(e.s==='ya'){ toast('Ese pedido ya está cargado ('+e.g.sup+' · '+fmtD(e.g.fecha)+(e.g.nro?' · N° '+e.g.nro:'')+'): no se carga dos veces'); return; } }
+  const n=guardarPedido(R); rep=null; toast('Pedido guardado: '+n+' línea(s) de '+R.sup); render();
 }
-function editarPedido(lote){ const xs=Object.values(S.pedidos).filter(x=>loteDe(x)===lote); if(!xs.length) return; const a=xs[0]; rep={kind:'pedido',sup:a.sup,fecha:a.fecha,nro:a.nro||'',obs:a.obs||'',items:xs.map(x=>({codigo:x.codigo||'',desc:x.desc,cant:x.cant,patente:x.patente||'',ot:x.ot||'',fecha:x.fecha!==a.fecha?x.fecha:''})),archivo:a.archivo||'',ocr:'',lote,nuevo:false}; render(); window.scrollTo&&window.scrollTo(0,0); }
+function editarPedido(lote){ const xs=Object.values(S.pedidos).filter(x=>loteDe(x)===lote); if(!xs.length) return; const a=xs[0]; rep={kind:'pedido',sup:a.sup,fecha:a.fecha,nro:a.nro||'',obs:a.obs||'',items:xs.map(x=>({codigo:x.codigo||'',desc:x.desc,cant:x.cant,patente:x.patente||'',ot:x.ot||'',fecha:x.fecha!==a.fecha?x.fecha:''})),archivo:a.archivo||'',ocr:'',lote,viejo:lote,nuevo:false}; render(); window.scrollTo&&window.scrollTo(0,0); }
 function delPedido(lote){ if(!confirm('¿Quitar este pedido de repuestos?')) return; Object.values(S.pedidos).filter(x=>loteDe(x)===lote).forEach(x=>del('pedidos',x.id)); render(); }
 function vPedidosEstado(){
   const g={}; Object.values(S.pedidos||{}).forEach(x=>{ const k=loteDe(x); (g[k]=g[k]||[]).push(x); });
@@ -2154,7 +2192,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v53</div>
+  <div class="note">Versión de la app: v54</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
