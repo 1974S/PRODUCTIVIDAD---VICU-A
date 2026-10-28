@@ -297,9 +297,9 @@ function whenAuthReady(cb){ if(!window.firebase) return; const un=firebase.auth(
 const clean=o=>JSON.parse(JSON.stringify(o));
 
 /* ═══════════ ESTADO ═══════════ */
-const COLS=['turnos','trabajos','backlogs','qc','edp','envios','pedidos'];
+const COLS=['turnos','trabajos','backlogs','qc','edp','envios','pedidos','stockrep'];
 const LS='pv_data_v1';
-let S={turnos:{},trabajos:{},backlogs:{},qc:{},edp:{},envios:{},pedidos:{},config:{}};
+let S={turnos:{},trabajos:{},backlogs:{},qc:{},edp:{},envios:{},pedidos:{},stockrep:{},config:{}};
 try{ const r=JSON.parse(localStorage.getItem(LS)||'null'); if(r){ S=Object.assign(S,r); } }catch(e){}
 COLS.forEach(c=>{ if(!S[c]) S[c]={}; });
 if(!S.config) S.config={};
@@ -565,7 +565,7 @@ function proyeccion(mios,nom,etq){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v45</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v47</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -725,7 +725,7 @@ function vFlota(c){
       h+=`<div class="btn-row wr" style="margin-top:10px;"><button class="btn-secondary" onclick="selTodasOT()">Seleccionar todas</button><button class="btn-primary" onclick="importarOT()">Importar seleccionadas</button></div><div class="note">Importa a "Trabajos": PM = programado; el resto, imprevisto. Revisá el tipo de reparación después, se clasifica por palabras clave.</div>`;
     }
   }
-  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('⛏️','Importar OT valorizadas · Taller Mina (PDF)','.pdf',1,'hoja_mina')+btnCarga('🏢','Importar OT valorizadas · Taller Sede (PDF)','.pdf',1,'hoja_sede')+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+btnCarga('💲','Cargar lista de precios (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'lista')+btnCarga('📦','Cargar stock valorado (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'stock')+btnCarga('🚚','Cargar envío de repuestos (remito: PDF / foto)','.pdf,.jpg,.jpeg,.png',1,'envio')+`<button style="${BTNC}" onclick="envioNuevo()">✍️ Cargar envío de repuestos a mano</button>`+btnCarga('🧾','Cargar EDP del mes (Excel / PDF) y respaldo de órdenes firmadas (ZIP / fotos)','.xlsx,.xls,.pdf,.zip,.jpg,.jpeg,.png',1,'edp')+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+vPreciosEstado()+vEdpEstado()+vEnviosEstado()+`</div>`;
+  h+=`<div class="sec-hdr">Manual: cargar informes (solo si faltan en Flota)</div><div class="wr">`+btnCarga('📅','Importar cambio de turno (Excel)','.xlsx,.xls,.csv,.docx',1)+btnCarga('⛏️','Importar OT valorizadas · Taller Mina (PDF)','.pdf',1,'hoja_mina')+btnCarga('🏢','Importar OT valorizadas · Taller Sede (PDF)','.pdf',1,'hoja_sede')+btnCarga('📊','Importar informe de indicadores (PDF)','.pdf',1)+btnCarga('🗂️','Cargar archivo mensual: backlogs y repuestos (Excel / PDF)','.xlsx,.xls,.csv,.pdf',1)+btnCarga('💲','Cargar lista de precios (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'lista')+btnCarga('📦','Cargar stock valorado (Excel / PDF)','.xlsx,.xls,.csv,.pdf',0,'stock')+btnCarga('📋','Cargar reporte de stock (cantidades, Excel)','.xlsx,.xls,.csv',0,'stockrep')+btnCarga('🚚','Cargar envío de repuestos (remito: PDF / foto)','.pdf,.jpg,.jpeg,.png',1,'envio')+`<button style="${BTNC}" onclick="envioNuevo()">✍️ Cargar envío de repuestos a mano</button>`+btnCarga('🧾','Cargar EDP del mes (Excel / PDF) y respaldo de órdenes firmadas (ZIP / fotos)','.xlsx,.xls,.pdf,.zip,.jpg,.jpeg,.png',1,'edp')+`<div class="note">Se detecta el tipo de archivo automáticamente y podés elegir varios a la vez.</div>`+vInforme()+vPreciosEstado()+vEdpEstado()+vEnviosEstado()+vStockRepEstado()+`</div>`;
   h+=`<div class="sec-hdr">Carga manual desde Excel / CSV</div><div class="wr">`+vImport()+`</div>`;
   c.innerHTML=h;
 }
@@ -891,7 +891,7 @@ function aplicarPar(t,o){
 }
 async function cargarInforme(fl,hint){
   const files=fl&&typeof fl.length==='number'&&!fl.name?[...fl]:(fl?[fl]:[]);
-  for(const f of files) await (/^hoja_/.test(hint||'')?cargarHojas(f,hint.slice(5)):hint==='edp'?cargarEdp(f):hint==='envio'?cargarEnvio(f):hint?cargarPrecios(f,hint):cargarUno(f));
+  for(const f of files) await (/^hoja_/.test(hint||'')?cargarHojas(f,hint.slice(5)):hint==='edp'?cargarEdp(f):hint==='envio'?cargarEnvio(f):hint==='stockrep'?cargarStockRep(f):hint?cargarPrecios(f,hint):cargarUno(f));
   render();
 }
 async function cargarPrecios(file,fuente){
@@ -902,10 +902,10 @@ async function cargarPrecios(file,fuente){
     if(['xlsx','xls','csv'].includes(ext)){
       if(!window.XLSX) throw new Error('Librería Excel no disponible (sin conexión)');
       const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array',cellDates:true});
-      const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''}); const hi=preHeader(aoa);
+      const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames.slice().sort((a,b)=>(((wb.Sheets[b]||{})['!ref']||'').length&&XLSX.utils.decode_range(wb.Sheets[b]['!ref']).e.r)-(((wb.Sheets[a]||{})['!ref']||'').length&&XLSX.utils.decode_range(wb.Sheets[a]['!ref']).e.r))[0]],{header:1,raw:true,defval:''}); const hi=preHeader(aoa);
       if(hi<0){ rep={kind:'aviso',name:file.name,msg:'No se encontró una tabla con descripción y precio. Revisá que la primera fila de la tabla tenga títulos como Código, Descripción y Precio.'}; return; }
       const head=aoa[hi].map(x=>String(x||'').trim()); rep=Object.assign(base,{pdf:false,head,rows:aoa.slice(hi+1).filter(r=>r.some(v=>v!=='')),map:preMapAuto(head)});
-      if(!preItemsExcel(rep).length) rep.map=preMapAuto(head);
+      
     }else if(ext==='pdf'){
       if(!window.pdfjsLib){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
       const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
@@ -998,6 +998,7 @@ function vInforme(){
   if(rep.kind==='hojas') return vHojas();
   if(rep.kind==='edp') return vEdp();
   if(rep.kind==='envio') return vEnvio();
+  if(rep.kind==='stockrep') return vStockRep();
   if(rep.kind==='edpresp') return vEdpResp();
   if(rep.kind==='mensual') return vMensual();
   if(rep.kind==='precios') return vPrecios();
@@ -1276,19 +1277,24 @@ function vEnviosEstado(){
 
 /* ═══════════ STOCK: stock valorado + repuestos en tránsito + consumos y pedidos por supervisor ═══════════ */
 function stkMeses(){ const s=new Set(); Object.values(S.trabajos).forEach(x=>{ if(x.fecha&&(x.repuestos||[]).length) s.add(x.fecha.slice(0,7)); }); Object.values(S.pedidos||{}).forEach(x=>{ if(x.fecha) s.add(x.fecha.slice(0,7)); }); return [...s].sort().reverse(); }
-function stkDatos(mesStock,per){
-  const P=mesStock&&PRE.stock[mesStock]?PRE.stock[mesStock]:null, ix=P?preIndex(P):null, rows=new Map();
-  const unit=it=>{ const v=precioMoneda(it); return v!=null&&v>0?v:0; };
+function stkFuentes(){ return [...Object.keys(S.stockrep||{}).sort().reverse().map(id=>({v:'r:'+id,l:'Reporte de stock del '+fmtD(S.stockrep[id].fecha)})),...Object.keys(PRE.stock||{}).sort().reverse().map(m=>({v:'v:'+m,l:'Stock valorado '+m}))]; }
+function stkDatos(src,per){
+  let P=null, fp=hoyISO();
+  if(src&&src.slice(0,2)==='r:'&&S.stockrep[src.slice(2)]){ const R=S.stockrep[src.slice(2)]; P={items:R.items||[]}; fp=R.fecha; }
+  else if(src&&src.slice(0,2)==='v:'&&PRE.stock[src.slice(2)]){ P=PRE.stock[src.slice(2)]; fp=src.slice(2)+'-28'; }
+  const ix=P?preIndex(P):null, rows=new Map();
+  const unit=it=>{ if(it.p!=null){ const v=precioMoneda(it); return v!=null&&v>0?v:0; } return precioDe({codigo:it.c,desc:it.d},fp)||0; };
+  const T={stkV:0,traV:0,cons:{},ped:{}};
   const rowOf=(r,fecha)=>{ let it=null;
     if(ix){ it=(r.codigo&&ix.c[nkey(r.codigo)])||ix.d[nkey(r.desc)]||null;
       if(!it){ const w=new Set(nkey(r.desc).split(' ').filter(x=>x.length>2)); if(w.size){ let best=0,bi=null; ix.tk.forEach(([s,i])=>{ let c=0; w.forEach(x=>{ if(s.has(x)) c++; }); const j=c/(w.size+s.size-c); if(j>best){ best=j; bi=i; } }); if(best>=0.6) it=bi; } } }
     const key=it?'S:'+(it.c?nkey(it.c):nkey(it.d)):'X:'+(nkey(r.codigo)||nkey(r.desc));
     let o=rows.get(key); if(!o){ o={cod:it?it.c:(r.codigo||''),desc:it?it.d:(r.desc||r.codigo||''),stk:0,stkV:0,tra:0,traV:0,cons:{},ped:{},enStock:!!it,u:it?unit(it):0}; rows.set(key,o); }
     return o; };
-  if(P) P.items.forEach(it=>{ const o=rowOf({codigo:it.c,desc:it.d}); o.stk+=num(it.q); o.stkV+=num(it.q)*unit(it); o.conQ=o.conQ||it.q>0; });
+  if(P) P.items.forEach(it=>{ const o=rowOf({codigo:it.c,desc:it.d}); if(it.q!=null&&it.q!==''){ o.stk+=num(it.q); o.stkV+=num(it.q)*unit(it); o.conQ=true; } if(it.sit) o.sit=it.sit; if(it.min!=null) o.min=it.min; if(it.max!=null) o.max=it.max;
+    if(num(it.tr)>0){ const v=num(it.tr)*unit(it); o.tra+=num(it.tr); o.traV+=v; T.traV+=v; } });
   const add=(o,tipo,sup,c,v)=>{ const m=o[tipo]; const z=(m[sup]=m[sup]||{q:0,v:0}); z.q+=c; z.v+=v; };
   const valor=(r,f)=>{ const c=num(r.cant)||0; const pr=num(r.precio)>0?num(r.precio):(precioDe(r,f)||0); return c*pr; };
-  const T={stkV:0,traV:0,cons:{},ped:{}};
   Object.values(S.envios||{}).forEach(e=>{ if(e.estado==='recibido') return; (e.items||[]).forEach(i=>{ const o=rowOf(i,e.fecha), c=num(i.cant), v=valor(i,e.fecha); o.tra+=c; o.traV+=v; T.traV+=v; }); });
   Object.values(S.trabajos).forEach(x=>{ if(!x.fecha||(per!=='todo'&&x.fecha.slice(0,7)!==per)) return; const tu=S.turnos[x.turnoId]; const sup=tu?tu.supervisor:'Sin supervisor';
     (x.repuestos||[]).forEach(r=>{ const o=rowOf(r,x.fecha), c=num(r.cant), v=valor(r,x.fecha); add(o,'cons',sup,c,v); const z=(T.cons[sup]=T.cons[sup]||{q:0,v:0}); z.q+=c; z.v+=v; }); });
@@ -1297,35 +1303,76 @@ function stkDatos(mesStock,per){
   return {P,rows:[...rows.values()],T};
 }
 function vStock(c){
-  const oc=ocultarCostos(), meses=Object.keys(PRE.stock||{}).sort().reverse(), perL=stkMeses();
-  let mes=localStorage.getItem('pv_stk_mes')||''; if(!meses.includes(mes)) mes=meses[0]||'';
+  const oc=ocultarCostos(), fu=stkFuentes(), perL=stkMeses();
+  let src=localStorage.getItem('pv_stk_src')||''; if(!fu.some(x=>x.v===src)) src=fu[0]?fu[0].v:'';
   let per=localStorage.getItem('pv_stk_per')||''; if(per!=='todo'&&!perL.includes(per)) per=perL[0]||'todo';
-  const q=(localStorage.getItem('pv_stk_q')||''), solo=localStorage.getItem('pv_stk_solo')!=='0';
-  const D=stkDatos(mes,per), sups=[...new Set([...SUP_NOMBRES,...Object.keys(D.T.cons),...Object.keys(D.T.ped)])].filter(s=>SUP_NOMBRES.includes(s)||D.T.cons[s]||D.T.ped[s]);
-  const sumo=o=>Object.values(o).reduce((s,z)=>s+z.v,0), sumq=o=>Object.values(o).reduce((s,z)=>s+z.q,0);
+  const q=(localStorage.getItem('pv_stk_q')||''), solo=localStorage.getItem('pv_stk_solo')==='1';
+  const D=stkDatos(src,per), sups=[...new Set([...SUP_NOMBRES,...Object.keys(D.T.cons),...Object.keys(D.T.ped)])].filter(s=>SUP_NOMBRES.includes(s)||D.T.cons[s]||D.T.ped[s]);
+  const sumo=o=>Object.values(o).reduce((s,z)=>s+z.v,0);
   let h=`<div class="sec-hdr">Stock valorado, repuestos en tránsito, consumos y pedidos</div>`;
-  h+=`<div class="frow2"><div class="fg"><label class="fl">Stock valorado de</label><select class="fs" onchange="localStorage.setItem('pv_stk_mes',this.value);render()">${meses.length?meses.map(m=>`<option ${m===mes?'selected':''}>${m}</option>`).join(''):'<option value="">— sin stock cargado —</option>'}</select></div><div class="fg"><label class="fl">Consumos y pedidos de</label><select class="fs" onchange="localStorage.setItem('pv_stk_per',this.value);render()"><option value="todo" ${per==='todo'?'selected':''}>Todos los períodos</option>${perL.map(m=>`<option ${m===per?'selected':''}>${m}</option>`).join('')}</select></div></div>`;
-  if(!D.P) h+=`<div class="alert alert-info">Todavía no hay stock valorado cargado: cargalo en Flota → "Cargar stock valorado". Igual se muestran los envíos, consumos y pedidos.</div>`;
-  else if(!D.P.items.some(i=>i.q>0)) h+=`<div class="alert alert-info">El stock cargado no tiene cantidades guardadas (se cargó antes de esta versión). Volvé a cargar el archivo de stock valorado del mes para ver las cantidades y el valor del stock.</div>`;
+  h+=`<div class="frow2"><div class="fg"><label class="fl">Cantidades de stock</label><select class="fs" onchange="localStorage.setItem('pv_stk_src',this.value);render()">${fu.length?fu.map(x=>`<option value="${x.v}" ${x.v===src?'selected':''}>${esc(x.l)}</option>`).join(''):'<option value="">— sin stock cargado —</option>'}</select></div><div class="fg"><label class="fl">Consumos y pedidos de</label><select class="fs" onchange="localStorage.setItem('pv_stk_per',this.value);render()"><option value="todo" ${per==='todo'?'selected':''}>Todos los períodos</option>${perL.map(m=>`<option ${m===per?'selected':''}>${m}</option>`).join('')}</select></div></div>`;
+  if(!D.P) h+=`<div class="alert alert-info">Todavía no hay stock cargado: cargá el reporte de stock en Flota → "Cargar reporte de stock". Igual se muestran los envíos, consumos y pedidos.</div>`;
+  else if(!D.P.items.some(i=>i.q>0)) h+=`<div class="alert alert-info">Esta fuente no tiene cantidades. Cargá el reporte de stock (Excel con la columna Stock).</div>`;
+  else if(!oc&&D.T.stkV===0) h+=`<div class="alert alert-info">Hay cantidades pero no se encontró precio de los repuestos: cargá la lista de precios o el stock valorado del mes para valorizar.</div>`;
   if(!oc) h+=`<div class="kpi-strip">${kc(fm(D.T.stkV),'Stock valorado','kpi-blue',1)}${kc(fm(D.T.traV),'En tránsito','kpi-orange',1)}${kc(fm(sumo(D.T.cons)),'Consumos','kpi-green',1)}${kc(fm(sumo(D.T.ped)),'Pedidos','kpi-blue',1)}</div>`;
   h+=`<div class="tbl-wrap"><table style="min-width:420px;"><thead><tr><th>Supervisor</th><th>Consumo (u.)</th>${oc?'':'<th>Consumo valorado</th>'}<th>Pedidos (u.)</th>${oc?'':'<th>Pedidos valorados</th>'}</tr></thead><tbody>${sups.map(s=>{ const a=D.T.cons[s]||{q:0,v:0}, b=D.T.ped[s]||{q:0,v:0}; return `<tr><td><b>${esc(s)}</b></td><td>${fnum(a.q,0)}</td>${oc?'':`<td>${fm(a.v)}</td>`}<td>${fnum(b.q,0)}</td>${oc?'':`<td>${fm(b.v)}</td>`}</tr>`; }).join('')}</tbody></table></div>`;
   h+=`<div class="frow2"><div class="fg"><input class="fi" placeholder="Buscar por código o descripción" value="${esc(q)}" onchange="localStorage.setItem('pv_stk_q',this.value);render()"></div><div class="fg"><label class="chk-row" style="display:flex;gap:8px;align-items:center;margin-top:10px;"><input type="checkbox" class="chk" ${solo?'checked':''} onchange="localStorage.setItem('pv_stk_solo',this.checked?'1':'0');render()"> Solo con tránsito, consumo o pedido</label></div></div>`;
   const nq=norm(q); let rows=D.rows.filter(o=>(!nq||norm(o.cod+' '+o.desc).includes(nq))&&(!solo||o.tra||Object.keys(o.cons).length||Object.keys(o.ped).length));
   rows.sort((a,b)=>((b.tra>0)-(a.tra>0))||(b.traV+b.stkV)-(a.traV+a.stkV)||a.desc.localeCompare(b.desc));
-  const tot=rows.length, MAX=400, vis=rows.slice(0,MAX), cs=a=>a?fnum(a.q,0):'';
+  const tot=rows.length, MAX=400, vis=rows.slice(0,MAX);
   const cell=(a,b)=>(a||b)?fnum(a?a.q:0,0)+' / '+fnum(b?b.q:0,0):'';
-  h+=`<div class="tbl-wrap"><table style="min-width:${640+sups.length*110}px;"><thead><tr><th>Repuesto</th><th>Stock (u.)</th>${oc?'':'<th>Stock valorado</th>'}<th>En tránsito (u.)</th>${oc?'':'<th>En tránsito valorado</th>'}${sups.map(s=>`<th>${esc(s.split(' ').pop())}<br>cons. / ped.</th>`).join('')}</tr></thead><tbody>`;
-  vis.forEach(o=>{ h+=`<tr><td style="text-align:left;white-space:normal;min-width:220px;"><b>${esc(o.desc)}</b>${o.cod?'<div class="ev-int">'+esc(o.cod)+'</div>':''}${o.enStock?'':'<div class="ev-int">no figura en el stock</div>'}</td><td>${o.conQ?fnum(o.stk,0):'—'}</td>${oc?'':`<td>${o.conQ?fm(o.stkV):'—'}</td>`}<td>${o.tra?fnum(o.tra,0):''}</td>${oc?'':`<td>${o.tra?fm(o.traV):''}</td>`}${sups.map(s=>`<td>${cell(o.cons[s],o.ped[s])}</td>`).join('')}</tr>`; });
+  const hasSit=D.rows.some(o=>o.sit);
+  h+=`<div class="tbl-wrap"><table style="min-width:${640+sups.length*110}px;"><thead><tr><th>Repuesto</th><th>Stock (u.)</th>${hasSit?'<th>Situación</th>':''}${oc?'':'<th>Stock valorado</th>'}<th>En tránsito (u.)</th>${oc?'':'<th>En tránsito valorado</th>'}${sups.map(s=>`<th>${esc(s.split(' ').pop())}<br>cons. / ped.</th>`).join('')}</tr></thead><tbody>`;
+  vis.forEach(o=>{ h+=`<tr><td style="text-align:left;white-space:normal;min-width:220px;"><b>${esc(o.desc)}</b>${o.cod?'<div class="ev-int">'+esc(o.cod)+(o.min!=null||o.max!=null?' · mín '+(o.min==null?'—':o.min)+' · máx '+(o.max==null?'—':o.max):'')+'</div>':''}${o.enStock?'':'<div class="ev-int">no figura en el stock</div>'}</td><td>${o.conQ?fnum(o.stk,0):'—'}</td>${hasSit?`<td>${esc(o.sit||'')}</td>`:''}${oc?'':`<td>${o.conQ?fm(o.stkV):'—'}</td>`}<td>${o.tra?fnum(o.tra,0):''}</td>${oc?'':`<td>${o.tra?fm(o.traV):''}</td>`}${sups.map(s=>`<td>${cell(o.cons[s],o.ped[s])}</td>`).join('')}</tr>`; });
   if(!vis.length) h+=`<tr><td colspan="${3+sups.length+(oc?0:2)}" style="text-align:center;">Sin datos para mostrar</td></tr>`;
-  h+=`</tbody></table></div><div class="note">${tot>MAX?'Se muestran los primeros '+MAX+' de '+tot+' (usá el buscador o descargá el Excel). ':tot+' repuesto(s). '}En tránsito = envíos cargados que todavía no se marcaron como recibidos (se marcan en Flota → Envíos de repuestos cargados). Consumos = repuestos usados en los trabajos; pedidos = pedidos de repuestos del archivo mensual.</div><div class="btn-row"><button class="btn-secondary" onclick="stkExcel()">⬇️ Descargar Excel</button></div>`;
+  h+=`</tbody></table></div><div class="note">${tot>MAX?'Se muestran los primeros '+MAX+' de '+tot+' (usá el buscador o descargá el Excel). ':tot+' repuesto(s). '}Los precios salen de la lista de precios o el stock valorado cargados. En tránsito = envíos cargados que todavía no se marcaron como recibidos (se marcan en Flota → Envíos de repuestos cargados). Consumos = repuestos usados en los trabajos; pedidos = pedidos del archivo mensual.</div><div class="btn-row"><button class="btn-secondary" onclick="stkExcel()">⬇️ Descargar Excel</button></div>`;
   c.innerHTML=h;
 }
 function stkExcel(){
   if(!window.XLSX){ toast('Librería Excel no disponible'); return; }
-  const mes=localStorage.getItem('pv_stk_mes')||Object.keys(PRE.stock||{}).sort().pop()||'', per=localStorage.getItem('pv_stk_per')||'todo', D=stkDatos(mes,per), oc=ocultarCostos(), sups=SUP_NOMBRES;
-  const head=['Código','Descripción','Stock (u.)',...(oc?[]:['Stock valorado']),'En tránsito (u.)',...(oc?[]:['En tránsito valorado']),...sups.flatMap(s=>['Consumo '+s.split(' ').pop(),'Pedido '+s.split(' ').pop()])];
-  const rows=D.rows.map(o=>[o.cod,o.desc,o.conQ?o.stk:'',...(oc?[]:[o.conQ?Math.round(o.stkV):'']),o.tra||'',...(oc?[]:[Math.round(o.traV)||'']),...sups.flatMap(s=>[(o.cons[s]||{}).q||'',(o.ped[s]||{}).q||''])]);
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Stock valorado '+mes+' · consumos y pedidos '+(per==='todo'?'de todos los períodos':per)+' · moneda '+cfg('moneda')],[],head,...rows]),'Stock'); XLSX.writeFile(wb,'Stock_Repuestos_'+hoyISO()+'.xlsx');
+  const fu=stkFuentes(); let src=localStorage.getItem('pv_stk_src')||''; if(!fu.some(x=>x.v===src)) src=fu[0]?fu[0].v:'';
+  const per=localStorage.getItem('pv_stk_per')||'todo', D=stkDatos(src,per), oc=ocultarCostos(), sups=SUP_NOMBRES;
+  const head=['Código','Descripción','Mín','Máx','Stock (u.)','Situación',...(oc?[]:['Stock valorado']),'En tránsito (u.)',...(oc?[]:['En tránsito valorado']),...sups.flatMap(s=>['Consumo '+s.split(' ').pop(),'Pedido '+s.split(' ').pop()])];
+  const rows=D.rows.map(o=>[o.cod,o.desc,o.min==null?'':o.min,o.max==null?'':o.max,o.conQ?o.stk:'',o.sit||'',...(oc?[]:[o.conQ?Math.round(o.stkV):'']),o.tra||'',...(oc?[]:[Math.round(o.traV)||'']),...sups.flatMap(s=>[(o.cons[s]||{}).q||'',(o.ped[s]||{}).q||''])]);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Stock · consumos y pedidos '+(per==='todo'?'de todos los períodos':per)+' · moneda '+cfg('moneda')],[],head,...rows]),'Stock'); XLSX.writeFile(wb,'Stock_Repuestos_'+hoyISO()+'.xlsx');
+}
+/* ── Reporte de stock (cantidades): N Parte, Artículo, Máx, Mín, Stock, Situación, Tránsito ── */
+function parseStockRep(wb,nombre){
+  const ws=wb.Sheets[wb.SheetNames[0]]; const A=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''}); let hi=-1, m={};
+  for(let i=0;i<Math.min(A.length,60);i++){ const h=A[i].map(norm); const st=h.findIndex(x=>/^stock|exist|cantidad|saldo/.test(x)), ds=h.findIndex(x=>/articulo|descrip|producto|detalle|repuesto/.test(x)); if(st>=0&&ds>=0){ hi=i; m={st,ds,cod:h.findIndex(x=>/parte|codigo|cod\b|sku/.test(x)),max:h.findIndex(x=>/^max/.test(x)),min:h.findIndex(x=>/^min/.test(x)),sit:h.findIndex(x=>/situac|estado/.test(x)),tr:h.findIndex(x=>/transit/.test(x))}; break; } }
+  if(hi<0) return null;
+  let fecha=''; for(let i=0;i<Math.min(A.length,15)&&!fecha;i++) A[i].forEach(v=>{ if(!fecha&&typeof v==='string'){ const q=v.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/); if(q) fecha=q[3]+'-'+q[2].padStart(2,'0')+'-'+q[1].padStart(2,'0'); } });
+  if(!fecha){ const q=String(nombre).match(/(\d{1,2})[\-_.](\d{1,2})[\-_.](\d{4})/); fecha=q?q[3]+'-'+q[2].padStart(2,'0')+'-'+q[1].padStart(2,'0'):hoyISO(); }
+  const nv=x=>{ const n=numAR(x); return n==null?null:n; };
+  const items=[]; A.slice(hi+1).forEach(r=>{ const d=String(r[m.ds]||'').trim(); if(!d) return; const q=nv(r[m.st]); if(q==null) return;
+    const it={c:m.cod>=0?String(r[m.cod]||'').trim():'',d,q}; if(m.max>=0&&nv(r[m.max])!=null) it.max=nv(r[m.max]); if(m.min>=0&&nv(r[m.min])!=null) it.min=nv(r[m.min]); if(m.sit>=0&&String(r[m.sit]).trim()) it.sit=String(r[m.sit]).trim(); if(m.tr>=0&&nv(r[m.tr])>0) it.tr=nv(r[m.tr]); items.push(it); });
+  return {fecha,items};
+}
+async function cargarStockRep(file){
+  try{
+    if(!/\.(xlsx|xls|csv)$/i.test(file.name)){ rep={kind:'aviso',name:file.name,msg:'El reporte de stock se carga en Excel (.xlsx).'}; return; }
+    if(!window.XLSX) throw new Error('Librería Excel no disponible (sin conexión)');
+    const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array'}); const R=parseStockRep(wb,file.name);
+    if(!R||!R.items.length){ rep={kind:'aviso',name:file.name,msg:'No se encontró una tabla con artículo y stock. La primera fila de la tabla debe tener títulos como N Parte, Artículo y Stock.'}; return; }
+    rep=Object.assign(R,{kind:'stockrep',name:file.name});
+  }catch(e){ rep=null; toast('No se pudo leer: '+e.message); }
+}
+function vStockRep(){
+  const R=rep, tot=R.items.reduce((s,i)=>s+num(i.q),0), bajo=R.items.filter(i=>/bajo/i.test(i.sit||'')).length, tr=R.items.reduce((s,i)=>s+num(i.tr),0), id='sr_'+R.fecha;
+  let h=`<div class="alert alert-info"><b>Reporte de stock · ${esc(R.name)}</b><br>${R.items.length} artículo(s) · ${fnum(tot,0)} unidades en stock${bajo?' · '+bajo+' con situación "Bajo"':''}${tr?' · '+fnum(tr,0)+' unidades en tránsito':''}</div>`;
+  h+=`<div class="fg"><label class="fl">Fecha del reporte</label><input class="fi" type="date" value="${esc(R.fecha)}" onchange="rep.fecha=this.value;render()"></div>`;
+  if(S.stockrep[id]) h+=`<div class="note"><b>Ya hay un reporte de esa fecha: se reemplaza.</b></div>`;
+  h+=`<div class="ev-list">${R.items.slice(0,8).map(x=>`<div class="ev-card"><div class="ev-stripe sc-pm3"></div><div class="ev-body"><div class="ev-row1"><div class="ev-dom">${esc(x.d)}</div><div class="ev-date">${fnum(x.q,0)} u.</div></div><div class="ev-obs">${esc(x.c)}${x.sit?' · '+esc(x.sit):''}</div></div></div>`).join('')}</div><div class="note">Se muestran los primeros 8. Los valores se calculan con la lista de precios o el stock valorado.</div>`;
+  h+=`<div class="btn-row wr"><button class="btn-secondary" onclick="rep=null;render()">Cancelar</button><button class="btn-primary" onclick="aplicarStockRep()">Guardar reporte</button></div>`;
+  return h;
+}
+function aplicarStockRep(){ const R=rep; if(!R||R.kind!=='stockrep') return; put('stockrep',{id:'sr_'+R.fecha,fecha:R.fecha,items:R.items,archivo:R.name,creado:Date.now()}); localStorage.setItem('pv_stk_src','r:sr_'+R.fecha); rep=null; toast('Reporte de stock guardado'); render(); }
+function delStockRep(id){ if(!confirm('¿Quitar este reporte de stock?')) return; del('stockrep',id); render(); }
+function vStockRepEstado(){
+  const ids=Object.keys(S.stockrep||{}).sort().reverse();
+  let h=`<div class="sec-hdr">Reportes de stock cargados</div><div class="plan-card">`+(ids.length?'':`<div class="plan-row"><div class="plan-sys"><div class="ev-int">Todavía no hay reportes de stock cargados.</div></div></div>`);
+  ids.forEach(id=>{ const e=S.stockrep[id]; h+=`<div class="plan-row"><div class="plan-sys">${fmtD(e.fecha)}<div class="ev-int">${(e.items||[]).length} artículos · ${esc(e.archivo||'')}</div></div><button class="btn-secondary btn-sm" onclick="delStockRep('${id}')">Quitar</button></div>`; });
+  return h+`</div>`;
 }
 
 /* ═══════════ EDP (Estado de Pago) ═══════════ */
@@ -1735,13 +1782,17 @@ function numAR(v){
 }
 const nkey=s=>norm(String(s||'')).replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
 function esPrecioExcel(aoa){ return preHeader(aoa)>=0; }
+const RE_DESC=/descrip|articulo|producto|repuesto|detalle|material|nombre|denominac|item|concepto/, RE_PREC=/precio|costo|cost|valor|importe|p ?unit|\bpvp\b|total|monto|\bpu\b/, RE_CANT=/stock|cant|exist|saldo|unid|qty/;
 function preHeader(aoa){
-  for(let i=0;i<Math.min(aoa.length,30);i++){ const h=aoa[i].map(norm); const d=h.some(x=>/descrip|articulo|producto|repuesto|detalle|material/.test(x)), p=h.some(x=>/precio|costo|valor|importe|p ?unit|\bpvp\b/.test(x)); const f=h.some(x=>x.includes('fecha'))&&h.some(x=>/unidad|patente|dominio/.test(x)); if(d&&p&&!f) return i; }
+  const lim=Math.min(aoa.length,80);
+  for(let i=0;i<lim;i++){ const h=aoa[i].map(norm); const d=h.some(x=>RE_DESC.test(x)), p=h.some(x=>RE_PREC.test(x)); const f=h.some(x=>x.includes('fecha'))&&h.some(x=>/unidad|patente|dominio/.test(x)); if(d&&p&&!f) return i; }
+  // sin títulos reconocibles: primera fila con varios textos y datos debajo (se elige cada columna a mano)
+  for(let i=0;i<lim-1;i++){ const r=aoa[i]; const txt=r.filter(x=>typeof x==='string'&&x.trim()).length; if(txt>=3&&aoa.slice(i+1,i+6).some(q=>q.filter(x=>x!=='').length>=3)) return i; }
   return -1;
 }
 function preMapAuto(head){
   const h=head.map(norm), f=re=>h.findIndex(x=>re.test(x));
-  return {cod:f(/^(cod|codigo|sku|art|n ?parte|nro parte|part ?n)/),desc:f(/descrip|articulo|producto|repuesto|detalle|material/),precio:f(/p ?unit|precio unit|precio|costo unit|costo|pvp|valor unit/),cant:f(/stock|cant|exist/),total:f(/total|valor stock|valorizado|importe|subtotal/)};
+  return {cod:f(/^(cod|codigo|sku|art|n ?parte|nro parte|part ?n)/),desc:f(RE_DESC),precio:(()=>{ const a=f(/p ?unit|precio unit|costo unit|valor unit|cost.*unit|\bpu\b/); return a>=0?a:f(/precio|costo|cost|pvp/); })(),cant:f(RE_CANT),total:f(/total|valor stock|valorizado|importe|subtotal|monto/)};
 }
 function preItemsExcel(R){
   const m=R.map, out=[];
@@ -1968,7 +2019,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v45</div>
+  <div class="note">Versión de la app: v47</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
