@@ -223,6 +223,7 @@ textarea:focus,input:focus{outline:none;border-color:#35d0ff;box-shadow:0 0 8px 
       <button class="tab-btn" data-tab="turno" onclick="setTab('turno',this)">Turno</button>
       <button class="tab-btn" data-tab="calendario" onclick="setTab('calendario',this)">Calendario</button>
       <button class="tab-btn" data-tab="flota" onclick="setTab('flota',this)">Flota</button>
+      <button class="tab-btn" data-tab="stock" onclick="setTab('stock',this)">Stock</button>
       <button class="tab-btn" data-tab="informes" onclick="setTab('informes',this)">Informes</button>
       <button class="tab-btn" data-tab="ajustes" onclick="setTab('ajustes',this)">Ajustes</button>
     </div>
@@ -281,7 +282,7 @@ let userRole=null;
 function soloLectura(){ if(userRole) return userRole==='lectura'; try{return sessionStorage.getItem('pv_role')==='lectura';}catch(e){return false;} }
 const esAdmin=()=>userRole==='admin';
 const ocultarCostos=()=>userRole==='carga';
-const TABS_POR_ROL={ carga:['turno','calendario','flota'], lectura:['inicio','turno','calendario','flota'] };
+const TABS_POR_ROL={ carga:['turno','calendario','flota','stock'], lectura:['inicio','turno','calendario','flota','stock'] };
 const tabPermitida=t=>{ const p=TABS_POR_ROL[userRole]; return !p||p.indexOf(t)>-1; };
 
 let db=null, fbOK=false, fbEstado='Sin conexión (datos locales)';
@@ -296,9 +297,9 @@ function whenAuthReady(cb){ if(!window.firebase) return; const un=firebase.auth(
 const clean=o=>JSON.parse(JSON.stringify(o));
 
 /* ═══════════ ESTADO ═══════════ */
-const COLS=['turnos','trabajos','backlogs','qc','edp','envios'];
+const COLS=['turnos','trabajos','backlogs','qc','edp','envios','pedidos'];
 const LS='pv_data_v1';
-let S={turnos:{},trabajos:{},backlogs:{},qc:{},edp:{},envios:{},config:{}};
+let S={turnos:{},trabajos:{},backlogs:{},qc:{},edp:{},envios:{},pedidos:{},config:{}};
 try{ const r=JSON.parse(localStorage.getItem(LS)||'null'); if(r){ S=Object.assign(S,r); } }catch(e){}
 COLS.forEach(c=>{ if(!S[c]) S[c]={}; });
 if(!S.config) S.config={};
@@ -464,7 +465,7 @@ function setTab(t,el){ curTab=t; document.querySelectorAll('.tab-btn').forEach(b
 function render(){
   if(!tabPermitida(curTab)){ curTab=TABS_POR_ROL[userRole][0]; document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===curTab)); }
   const c=$('content'); const sc=c.scrollTop;
-  if(curTab==='inicio') vInicio(c); else if(curTab==='turno') vTurno(c); else if(curTab==='calendario') vCalendario(c); else if(curTab==='flota') vFlota(c); else if(curTab==='informes') vInformes(c); else vAjustes(c);
+  if(curTab==='inicio') vInicio(c); else if(curTab==='turno') vTurno(c); else if(curTab==='calendario') vCalendario(c); else if(curTab==='flota') vFlota(c); else if(curTab==='stock') vStock(c); else if(curTab==='informes') vInformes(c); else vAjustes(c);
   c.scrollTop=sc;
 }
 function selTurnoHTML(){
@@ -564,7 +565,7 @@ function proyeccion(mios,nom,etq){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v44</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v45</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -1257,18 +1258,74 @@ function kitDatalistCat(){ return `<datalist id="kitDL">${kitCatalogo().map(s=>`
 function aplicarEnvio(){
   const R=rep; if(!R||R.kind!=='envio') return; const items=R.items.filter(i=>(i.desc||i.codigo)&&num(i.cant)>0).map(i=>({codigo:i.codigo||'',desc:i.desc||i.codigo,cant:num(i.cant)}));
   if(!items.length){ toast('Agregá al menos un repuesto'); return; } if(!R.fecha){ toast('Completá la fecha'); return; }
-  put('envios',{id:R.id,remito:R.remito,comp:R.comp||'',fecha:R.fecha,destino:R.destino,obs:R.obs,items,archivo:R.archivo||'',creado:Date.now()});
+  put('envios',{id:R.id,estado:(S.envios[R.id]&&S.envios[R.id].estado)||'transito',remito:R.remito,comp:R.comp||'',fecha:R.fecha,destino:R.destino,obs:R.obs,items,archivo:R.archivo||'',creado:Date.now()});
   rep=null; toast('Envío guardado: '+items.length+' línea(s)'); render();
 }
 function editarEnvio(id){ const e=S.envios[id]; if(!e) return; rep=Object.assign(JSON.parse(JSON.stringify(e)),{kind:'envio',ocr:'',nuevo:false}); render(); window.scrollTo&&window.scrollTo(0,0); }
+function marcarEnvio(id){ const e=S.envios[id]; if(!e) return; put('envios',Object.assign({},e,{estado:e.estado==='recibido'?'transito':'recibido'})); render(); }
 function delEnvio(id){ if(!confirm('¿Quitar este envío de repuestos?')) return; del('envios',id); render(); }
 function vEnviosEstado(){
   const ids=Object.keys(S.envios||{}).sort((a,b)=>(S.envios[b].fecha||'').localeCompare(S.envios[a].fecha||'')), oc=ocultarCostos();
   let h=`<div class="sec-hdr">Envíos de repuestos cargados</div><div class="plan-card">`+(ids.length?'':`<div class="plan-row"><div class="plan-sys"><div class="ev-int">Todavía no hay envíos cargados.</div></div></div>`);
   const mes={}; ids.forEach(id=>{ const e=S.envios[id], V=envioValor(e); const m=(e.fecha||'').slice(0,7); const o=(mes[m]=mes[m]||{n:0,u:0,v:0}); o.n++; o.u+=V.u; o.v+=V.v;
-    h+=`<div class="plan-row"><div class="plan-sys">${fmtD(e.fecha)} · Remito ${esc(e.remito||'s/n')}<div class="ev-int">${esc(e.destino||'')} · ${e.items.length} línea(s) · ${fnum(V.u,0)} u.${oc?'':' · '+fm(V.v)}${V.sin&&!oc?' ('+V.sin+' sin precio)':''}${e.obs?'<br>'+esc(e.obs):''}</div></div><button class="btn-secondary btn-sm" onclick="editarEnvio('${id}')">Ver / editar</button><button class="btn-secondary btn-sm" onclick="delEnvio('${id}')">Quitar</button></div>`; });
+    h+=`<div class="plan-row"><div class="plan-sys">${fmtD(e.fecha)} · Remito ${esc(e.remito||'s/n')}<div class="ev-int">${esc(e.destino||'')} · ${e.items.length} línea(s) · ${fnum(V.u,0)} u.${oc?'':' · '+fm(V.v)}${V.sin&&!oc?' ('+V.sin+' sin precio)':''}${e.obs?'<br>'+esc(e.obs):''}</div></div><button class="btn-secondary btn-sm" onclick="marcarEnvio('${id}')">${e.estado==='recibido'?'Recibido ✔':'En tránsito'}</button><button class="btn-secondary btn-sm" onclick="editarEnvio('${id}')">Ver / editar</button><button class="btn-secondary btn-sm" onclick="delEnvio('${id}')">Quitar</button></div>`; });
   if(ids.length&&!oc) h+=`<div class="plan-row"><div class="plan-sys"><b>Total por mes</b><div class="ev-int">${Object.keys(mes).sort().reverse().map(m=>m+': '+mes[m].n+' envío(s) · '+fnum(mes[m].u,0)+' u. · '+fm(mes[m].v)).join('<br>')}</div></div></div>`;
   return h+`</div>`;
+}
+
+
+/* ═══════════ STOCK: stock valorado + repuestos en tránsito + consumos y pedidos por supervisor ═══════════ */
+function stkMeses(){ const s=new Set(); Object.values(S.trabajos).forEach(x=>{ if(x.fecha&&(x.repuestos||[]).length) s.add(x.fecha.slice(0,7)); }); Object.values(S.pedidos||{}).forEach(x=>{ if(x.fecha) s.add(x.fecha.slice(0,7)); }); return [...s].sort().reverse(); }
+function stkDatos(mesStock,per){
+  const P=mesStock&&PRE.stock[mesStock]?PRE.stock[mesStock]:null, ix=P?preIndex(P):null, rows=new Map();
+  const unit=it=>{ const v=precioMoneda(it); return v!=null&&v>0?v:0; };
+  const rowOf=(r,fecha)=>{ let it=null;
+    if(ix){ it=(r.codigo&&ix.c[nkey(r.codigo)])||ix.d[nkey(r.desc)]||null;
+      if(!it){ const w=new Set(nkey(r.desc).split(' ').filter(x=>x.length>2)); if(w.size){ let best=0,bi=null; ix.tk.forEach(([s,i])=>{ let c=0; w.forEach(x=>{ if(s.has(x)) c++; }); const j=c/(w.size+s.size-c); if(j>best){ best=j; bi=i; } }); if(best>=0.6) it=bi; } } }
+    const key=it?'S:'+(it.c?nkey(it.c):nkey(it.d)):'X:'+(nkey(r.codigo)||nkey(r.desc));
+    let o=rows.get(key); if(!o){ o={cod:it?it.c:(r.codigo||''),desc:it?it.d:(r.desc||r.codigo||''),stk:0,stkV:0,tra:0,traV:0,cons:{},ped:{},enStock:!!it,u:it?unit(it):0}; rows.set(key,o); }
+    return o; };
+  if(P) P.items.forEach(it=>{ const o=rowOf({codigo:it.c,desc:it.d}); o.stk+=num(it.q); o.stkV+=num(it.q)*unit(it); o.conQ=o.conQ||it.q>0; });
+  const add=(o,tipo,sup,c,v)=>{ const m=o[tipo]; const z=(m[sup]=m[sup]||{q:0,v:0}); z.q+=c; z.v+=v; };
+  const valor=(r,f)=>{ const c=num(r.cant)||0; const pr=num(r.precio)>0?num(r.precio):(precioDe(r,f)||0); return c*pr; };
+  const T={stkV:0,traV:0,cons:{},ped:{}};
+  Object.values(S.envios||{}).forEach(e=>{ if(e.estado==='recibido') return; (e.items||[]).forEach(i=>{ const o=rowOf(i,e.fecha), c=num(i.cant), v=valor(i,e.fecha); o.tra+=c; o.traV+=v; T.traV+=v; }); });
+  Object.values(S.trabajos).forEach(x=>{ if(!x.fecha||(per!=='todo'&&x.fecha.slice(0,7)!==per)) return; const tu=S.turnos[x.turnoId]; const sup=tu?tu.supervisor:'Sin supervisor';
+    (x.repuestos||[]).forEach(r=>{ const o=rowOf(r,x.fecha), c=num(r.cant), v=valor(r,x.fecha); add(o,'cons',sup,c,v); const z=(T.cons[sup]=T.cons[sup]||{q:0,v:0}); z.q+=c; z.v+=v; }); });
+  Object.values(S.pedidos||{}).forEach(x=>{ if(!x.fecha||(per!=='todo'&&x.fecha.slice(0,7)!==per)) return; const r={desc:x.desc,cant:x.cant}; const o=rowOf(r,x.fecha), v=valor(r,x.fecha); add(o,'ped',x.sup,num(x.cant),v); const z=(T.ped[x.sup]=T.ped[x.sup]||{q:0,v:0}); z.q+=num(x.cant); z.v+=v; });
+  rows.forEach(o=>{ T.stkV+=o.stkV; });
+  return {P,rows:[...rows.values()],T};
+}
+function vStock(c){
+  const oc=ocultarCostos(), meses=Object.keys(PRE.stock||{}).sort().reverse(), perL=stkMeses();
+  let mes=localStorage.getItem('pv_stk_mes')||''; if(!meses.includes(mes)) mes=meses[0]||'';
+  let per=localStorage.getItem('pv_stk_per')||''; if(per!=='todo'&&!perL.includes(per)) per=perL[0]||'todo';
+  const q=(localStorage.getItem('pv_stk_q')||''), solo=localStorage.getItem('pv_stk_solo')!=='0';
+  const D=stkDatos(mes,per), sups=[...new Set([...SUP_NOMBRES,...Object.keys(D.T.cons),...Object.keys(D.T.ped)])].filter(s=>SUP_NOMBRES.includes(s)||D.T.cons[s]||D.T.ped[s]);
+  const sumo=o=>Object.values(o).reduce((s,z)=>s+z.v,0), sumq=o=>Object.values(o).reduce((s,z)=>s+z.q,0);
+  let h=`<div class="sec-hdr">Stock valorado, repuestos en tránsito, consumos y pedidos</div>`;
+  h+=`<div class="frow2"><div class="fg"><label class="fl">Stock valorado de</label><select class="fs" onchange="localStorage.setItem('pv_stk_mes',this.value);render()">${meses.length?meses.map(m=>`<option ${m===mes?'selected':''}>${m}</option>`).join(''):'<option value="">— sin stock cargado —</option>'}</select></div><div class="fg"><label class="fl">Consumos y pedidos de</label><select class="fs" onchange="localStorage.setItem('pv_stk_per',this.value);render()"><option value="todo" ${per==='todo'?'selected':''}>Todos los períodos</option>${perL.map(m=>`<option ${m===per?'selected':''}>${m}</option>`).join('')}</select></div></div>`;
+  if(!D.P) h+=`<div class="alert alert-info">Todavía no hay stock valorado cargado: cargalo en Flota → "Cargar stock valorado". Igual se muestran los envíos, consumos y pedidos.</div>`;
+  else if(!D.P.items.some(i=>i.q>0)) h+=`<div class="alert alert-info">El stock cargado no tiene cantidades guardadas (se cargó antes de esta versión). Volvé a cargar el archivo de stock valorado del mes para ver las cantidades y el valor del stock.</div>`;
+  if(!oc) h+=`<div class="kpi-strip">${kc(fm(D.T.stkV),'Stock valorado','kpi-blue',1)}${kc(fm(D.T.traV),'En tránsito','kpi-orange',1)}${kc(fm(sumo(D.T.cons)),'Consumos','kpi-green',1)}${kc(fm(sumo(D.T.ped)),'Pedidos','kpi-blue',1)}</div>`;
+  h+=`<div class="tbl-wrap"><table style="min-width:420px;"><thead><tr><th>Supervisor</th><th>Consumo (u.)</th>${oc?'':'<th>Consumo valorado</th>'}<th>Pedidos (u.)</th>${oc?'':'<th>Pedidos valorados</th>'}</tr></thead><tbody>${sups.map(s=>{ const a=D.T.cons[s]||{q:0,v:0}, b=D.T.ped[s]||{q:0,v:0}; return `<tr><td><b>${esc(s)}</b></td><td>${fnum(a.q,0)}</td>${oc?'':`<td>${fm(a.v)}</td>`}<td>${fnum(b.q,0)}</td>${oc?'':`<td>${fm(b.v)}</td>`}</tr>`; }).join('')}</tbody></table></div>`;
+  h+=`<div class="frow2"><div class="fg"><input class="fi" placeholder="Buscar por código o descripción" value="${esc(q)}" onchange="localStorage.setItem('pv_stk_q',this.value);render()"></div><div class="fg"><label class="chk-row" style="display:flex;gap:8px;align-items:center;margin-top:10px;"><input type="checkbox" class="chk" ${solo?'checked':''} onchange="localStorage.setItem('pv_stk_solo',this.checked?'1':'0');render()"> Solo con tránsito, consumo o pedido</label></div></div>`;
+  const nq=norm(q); let rows=D.rows.filter(o=>(!nq||norm(o.cod+' '+o.desc).includes(nq))&&(!solo||o.tra||Object.keys(o.cons).length||Object.keys(o.ped).length));
+  rows.sort((a,b)=>((b.tra>0)-(a.tra>0))||(b.traV+b.stkV)-(a.traV+a.stkV)||a.desc.localeCompare(b.desc));
+  const tot=rows.length, MAX=400, vis=rows.slice(0,MAX), cs=a=>a?fnum(a.q,0):'';
+  const cell=(a,b)=>(a||b)?fnum(a?a.q:0,0)+' / '+fnum(b?b.q:0,0):'';
+  h+=`<div class="tbl-wrap"><table style="min-width:${640+sups.length*110}px;"><thead><tr><th>Repuesto</th><th>Stock (u.)</th>${oc?'':'<th>Stock valorado</th>'}<th>En tránsito (u.)</th>${oc?'':'<th>En tránsito valorado</th>'}${sups.map(s=>`<th>${esc(s.split(' ').pop())}<br>cons. / ped.</th>`).join('')}</tr></thead><tbody>`;
+  vis.forEach(o=>{ h+=`<tr><td style="text-align:left;white-space:normal;min-width:220px;"><b>${esc(o.desc)}</b>${o.cod?'<div class="ev-int">'+esc(o.cod)+'</div>':''}${o.enStock?'':'<div class="ev-int">no figura en el stock</div>'}</td><td>${o.conQ?fnum(o.stk,0):'—'}</td>${oc?'':`<td>${o.conQ?fm(o.stkV):'—'}</td>`}<td>${o.tra?fnum(o.tra,0):''}</td>${oc?'':`<td>${o.tra?fm(o.traV):''}</td>`}${sups.map(s=>`<td>${cell(o.cons[s],o.ped[s])}</td>`).join('')}</tr>`; });
+  if(!vis.length) h+=`<tr><td colspan="${3+sups.length+(oc?0:2)}" style="text-align:center;">Sin datos para mostrar</td></tr>`;
+  h+=`</tbody></table></div><div class="note">${tot>MAX?'Se muestran los primeros '+MAX+' de '+tot+' (usá el buscador o descargá el Excel). ':tot+' repuesto(s). '}En tránsito = envíos cargados que todavía no se marcaron como recibidos (se marcan en Flota → Envíos de repuestos cargados). Consumos = repuestos usados en los trabajos; pedidos = pedidos de repuestos del archivo mensual.</div><div class="btn-row"><button class="btn-secondary" onclick="stkExcel()">⬇️ Descargar Excel</button></div>`;
+  c.innerHTML=h;
+}
+function stkExcel(){
+  if(!window.XLSX){ toast('Librería Excel no disponible'); return; }
+  const mes=localStorage.getItem('pv_stk_mes')||Object.keys(PRE.stock||{}).sort().pop()||'', per=localStorage.getItem('pv_stk_per')||'todo', D=stkDatos(mes,per), oc=ocultarCostos(), sups=SUP_NOMBRES;
+  const head=['Código','Descripción','Stock (u.)',...(oc?[]:['Stock valorado']),'En tránsito (u.)',...(oc?[]:['En tránsito valorado']),...sups.flatMap(s=>['Consumo '+s.split(' ').pop(),'Pedido '+s.split(' ').pop()])];
+  const rows=D.rows.map(o=>[o.cod,o.desc,o.conQ?o.stk:'',...(oc?[]:[o.conQ?Math.round(o.stkV):'']),o.tra||'',...(oc?[]:[Math.round(o.traV)||'']),...sups.flatMap(s=>[(o.cons[s]||{}).q||'',(o.ped[s]||{}).q||''])]);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Stock valorado '+mes+' · consumos y pedidos '+(per==='todo'?'de todos los períodos':per)+' · moneda '+cfg('moneda')],[],head,...rows]),'Stock'); XLSX.writeFile(wb,'Stock_Repuestos_'+hoyISO()+'.xlsx');
 }
 
 /* ═══════════ EDP (Estado de Pago) ═══════════ */
@@ -1622,6 +1679,7 @@ function aplicarMensual(){
   const ya=new Set(Object.values(S.backlogs).map(x=>x.rosterKey).filter(Boolean));
   R.bk.forEach(x=>{ if(!x.sup) return; const k=kBk(x); if(ya.has(k)) return; const T=turnoPara(x.sup,x.fecha); if(!T) return;
     put('backlogs',{id:uid('b'),turnoId:T.id,fecha:x.fecha,unidad:x.patente,ot:x.ot||'',descripcion:x.txt.slice(0,400),origen:'pdf',rosterKey:k,creado:Date.now()}); nb++; });
+  R.pr.forEach(x=>{ if(!x.sup) return; put('pedidos',{id:'pr_'+slug(x.sup)+'_'+x.fecha+'_'+x.patente+'_'+slug(x.desc).slice(0,30)+'_'+x.cant,fecha:x.fecha,sup:x.sup,patente:x.patente,ot:x.ot||'',desc:x.desc,cant:x.cant,creado:Date.now()}); });
   R.pr.forEach(x=>{ if(!x.sup) return; const t=trabajoDe(x); if(!t){ ns++; return; }
     const rs=(t.repuestos||[]).slice(); if(rs.some(r=>norm(r.desc)===norm(x.desc)&&num(r.cant)===x.cant)) return;
     rs.push({codigo:'',desc:x.desc,cant:x.cant,precio:null}); t.repuestos=rs; if(!t.ot&&x.ot) t.ot=x.ot; put('trabajos',t); np++; });
@@ -1690,7 +1748,7 @@ function preItemsExcel(R){
   R.rows.forEach(r=>{ const d=m.desc>=0?String(r[m.desc]||'').trim():''; if(!d) return;
     let p=m.precio>=0?numAR(r[m.precio]):null; const q=m.cant>=0?numAR(r[m.cant]):null, t=m.total>=0?numAR(r[m.total]):null;
     if((p==null||p===0)&&q&&t) p=t/q; if(p==null||p<=0) return;
-    out.push({c:m.cod>=0?String(r[m.cod]||'').trim():'',d,p:Math.round(p*10000)/10000}); });
+    const o={c:m.cod>=0?String(r[m.cod]||'').trim():'',d,p:Math.round(p*10000)/10000}; if(R.fuente==='stock'&&q>0) o.q=q; out.push(o); });
   return out;
 }
 function prePdfItems(pages,tipo){
@@ -1699,12 +1757,13 @@ function prePdfItems(pages,tipo){
     const tk=l.split(' '); const nums=[]; let i=tk.length;
     while(i>0&&nums.length<3){ const x=tk[i-1]; if(/^(U\$S|USD|\$)$/i.test(x)){ i--; continue; } if(/^-?[\d.,]+$/.test(x.replace(/^(U\$S|USD|\$)/i,''))&&numAR(x)!=null){ nums.unshift(numAR(x)); i--; } else break; }
     if(!nums.length||i<1) return;
+    let qS=null; if(tipo==='stock'&&nums.length>=2&&nums[0]>0) qS=nums[0];
     let desc=tk.slice(0,i).join(' '), cod=''; const m=desc.match(/^([A-Z0-9][A-Z0-9\-\/.]{2,})\s+(.{3,})$/); if(m&&/\d/.test(m[1])){ cod=m[1]; desc=m[2]; }
     if(!/[A-Za-zÁÉÍÓÚáéíóú]{3}/.test(desc)||/^(total|subtotal|pagina|p[aá]g|fecha|stock valorizado|lista de precios)/i.test(desc)) return;
     let p=null; const n=nums.length;
     if(tipo==='stock'){ if(n===3){ const [q,u,t]=nums; p=Math.abs(q*u-t)<=0.02*Math.abs(t)+0.05?u:(q?t/q:null); } else if(n===2){ const [q,t]=nums; p=(q>0&&t>q)?t/q:t; } else p=nums[0]; }
     else p=nums[n-1];
-    if(p==null||!(p>0)) return; out.push({c:cod,d:desc,p:Math.round(p*10000)/10000}); }));
+    if(p==null||!(p>0)) return; const o={c:cod,d:desc,p:Math.round(p*10000)/10000}; if(qS) o.q=qS; out.push(o); }));
   return out;
 }
 function preKit(o){ return o; }
@@ -1725,7 +1784,7 @@ function aplicarPrecios(){
   if(!items.length){ toast('No hay artículos con precio'); return; }
   const F=R.fuente, mes=R.mes||mesActual(); const P=PRE[F][mes]||{mes,items:[]}; const idx={}; (P.items||[]).forEach((x,k)=>idx[(x.c?'c:'+nkey(x.c):'d:'+nkey(x.d))]=k);
   const arr=(P.items||[]).slice();
-  items.forEach(x=>{ const it={c:x.c,d:x.d,p:x.p,m:R.mon,tc:R.tc||null}; const k=x.c?'c:'+nkey(x.c):'d:'+nkey(x.d); if(k in idx) arr[idx[k]]=it; else { idx[k]=arr.length; arr.push(it); } });
+  items.forEach(x=>{ const it={c:x.c,d:x.d,p:x.p,m:R.mon,tc:R.tc||null}; if(x.q>0) it.q=x.q; const k=x.c?'c:'+nkey(x.c):'d:'+nkey(x.d); if(k in idx) arr[idx[k]]=it; else { idx[k]=arr.length; arr.push(it); } });
   PRE[F][mes]={mes,items:arr,archivos:[...(P.archivos||[]),R.name].slice(-6),cargado:Date.now()}; putPre();
   const n=valorarRepuestos(); rep=null; toast(items.length+' precios de '+FUENTE[F].toLowerCase()+' guardados · '+n+' trabajo(s) valorados'); render();
 }
@@ -1909,7 +1968,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v44</div>
+  <div class="note">Versión de la app: v45</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
