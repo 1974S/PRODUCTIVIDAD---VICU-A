@@ -564,7 +564,7 @@ function proyeccion(mios,nom,etq){
 function vInicio(c){
   const ts=turnosOrd();
   if(!ts.length){ c.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-txt">Todavía no hay turnos cargados</div><div class="empty-sub wr">Tocá + para crear el primer turno de 14 días de un supervisor</div></div>`; return; }
-  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v41</div>`;
+  let h=`<div class="note" style="text-align:right;margin:0 0 4px;">v42</div>`;
   SUP_NOMBRES.forEach(n=>{
     const mios=ts.filter(t=>t.supervisor===n); h+=`<div class="sec-hdr">${esc(n)}</div>`;
     if(!mios.length){ h+=`<div class="plan-card"><div class="plan-note">Sin turnos cargados.</div></div>`; return; }
@@ -1608,13 +1608,33 @@ function precioEn(r,fecha,f){
   return it?precioMoneda(it):null;
 }
 function precioDe(r,fecha){ const o=cfg('fuentePrecio')||'stock'; const ord=o==='lista'?['lista']:o==='stock_only'?['stock']:o==='lista_stock'?['lista','stock']:['stock','lista']; for(const f of ord){ const p=precioEn(r,fecha,f); if(p!=null&&p>0) return p; } return null; }
-function kitPM(){ return String(cfg('kitPM')||'').split(/[;\n]+/).map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/^(\d+(?:[.,]\d+)?)\s*x?\s+(.+)$/i); return m?{cant:num(m[1]),desc:m[2].trim()}:{cant:1,desc:s}; }); }
+function kitTexto(){ return String(cfg('kitPM')||'').split(/[;\n]+/).map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/^(\d+(?:[.,]\d+)?)\s*x?\s+(.+)$/i); return m?{cant:num(m[1]),codigo:'',desc:m[2].trim(),precio:null}:{cant:1,codigo:'',desc:s,precio:null}; }); }
+function kitItems(){ const k=S.config.kitItems; return Array.isArray(k)?k:kitTexto(); }
+function kitPM(){ return kitItems().filter(i=>(i.desc||i.codigo)&&num(i.cant)>0).map(i=>({cant:num(i.cant),codigo:String(i.codigo||'').trim(),desc:String(i.desc||i.codigo).trim(),precio:num(i.precio)>0?num(i.precio):null})); }
+function kitSet(a){ if(soloLectura()) return; S.config.kitItems=a; putCfg(); valorarRepuestos(); render(); }
+function kitAdd(){ kitSet([...kitItems().map(x=>Object.assign({},x)),{cant:1,codigo:'',desc:'',precio:null}]); }
+function kitDel(i){ const a=kitItems().map(x=>Object.assign({},x)); a.splice(i,1); kitSet(a); }
+function kitEdit(i,f,v){ const a=kitItems().map(x=>Object.assign({},x)); if(!a[i]) return;
+  if(f==='desc'){ const m=String(v).match(/^(.+?) · (.+)$/); if(m){ a[i].codigo=m[1]; a[i].desc=m[2]; } else a[i].desc=v.trim(); }
+  else if(f==='cant') a[i].cant=num(v); else if(f==='precio') a[i].precio=v===''?null:num(v); else a[i][f]=v.trim();
+  kitSet(a); }
+function kitCatalogo(){ const seen=new Set(), out=[]; ['stock','lista'].forEach(f=>{ const ks=Object.keys(PRE[f]||{}).sort(); const P=ks.length?PRE[f][ks[ks.length-1]]:null; (P&&P.items||[]).forEach(it=>{ const k=(it.c||'')+'|'+it.d; if(seen.has(k)||out.length>6000) return; seen.add(k); out.push(it.c?it.c+' · '+it.d:it.d); }); }); return out; }
+function vKit(){
+  const a=kitItems(), ro=soloLectura();
+  let h=`<datalist id="kitDL">${kitCatalogo().map(s=>`<option value="${esc(s)}">`).join('')}</datalist>`;
+  h+=`<div class="fg"><label class="fl">Kit de repuestos del PM 5.000 km (se usa cuando la OT no trae repuestos)</label>`;
+  h+=a.length?'':`<div class="note">Todavía no hay repuestos en el kit. Agregalos con el botón de abajo.</div>`;
+  a.forEach((x,i)=>{ h+=`<div class="plan-card" style="display:block;margin-bottom:6px;"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;"><div style="width:64px;"><label class="fl">Cant.</label><input class="fi" type="number" step="any" inputmode="decimal" value="${esc(x.cant)}" ${ro?'disabled':''} onchange="kitEdit(${i},'cant',this.value)"></div><div style="flex:1;min-width:200px;"><label class="fl">Repuesto (escribí o elegí de la lista de precios / stock)</label><input class="fi" list="kitDL" value="${esc(x.desc)}" placeholder="Descripción" ${ro?'disabled':''} onchange="kitEdit(${i},'desc',this.value)"></div><div style="width:130px;"><label class="fl">Código</label><input class="fi" value="${esc(x.codigo||'')}" ${ro?'disabled':''} onchange="kitEdit(${i},'codigo',this.value)"></div><div style="width:110px;"><label class="fl">Precio fijo (opc.)</label><input class="fi" type="number" step="any" inputmode="decimal" value="${x.precio!=null?esc(x.precio):''}" placeholder="auto" ${ro?'disabled':''} onchange="kitEdit(${i},'precio',this.value)"></div>${ro?'':`<button class="btn-secondary btn-sm" onclick="kitDel(${i})">Quitar</button>`}</div></div>`; });
+  h+=ro?'':`<div class="btn-row"><button class="btn-primary" onclick="kitAdd()">+ Agregar repuesto al kit</button></div>`;
+  h+=`</div><div class="note">Si no cargás precio fijo, se valoriza solo con la lista de precios o el stock valorado (por código o descripción) del mes del trabajo. ${a.length?a.length+' repuesto(s) en el kit.':''} Al cambiar el kit se actualizan todos los PM 5.000 km que no traen repuestos propios.</div>`;
+  return h;
+}
 // completa el precio de los repuestos usados (y arma el kit de los PM 5.000 km que no traen repuestos)
 function valorarRepuestos(){
   if(soloLectura()) return 0; let n=0; const kit=kitPM();
   Object.values(S.trabajos).forEach(x=>{
     let rs=(x.repuestos||[]).slice(), ch=false;
-    if(kit.length&&/5\.?000/.test(x.reparacion||'')&&(!rs.length||rs.every(r=>r.kit))){ const k=kit.map(i=>({codigo:'',desc:i.desc,cant:i.cant,precio:null,kit:true})); if(JSON.stringify(rs.map(r=>[r.desc,r.cant]))!==JSON.stringify(k.map(r=>[r.desc,r.cant]))){ rs=k; ch=true; } }
+    if(kit.length&&/5\.?000/.test(x.reparacion||'')&&(!rs.length||rs.every(r=>r.kit))){ const k=kit.map(i=>({codigo:i.codigo||'',desc:i.desc,cant:i.cant,precio:i.precio,kit:true})); if(JSON.stringify(rs.map(r=>[r.codigo||'',r.desc,r.cant,r.autoPrecio?null:(r.precio||null)]))!==JSON.stringify(k.map(r=>[r.codigo,r.desc,r.cant,r.precio||null]))){ rs=k; ch=true; } }
     rs=rs.map(r=>{ if(num(r.precio)>0&&!r.autoPrecio) return r; const p=precioDe(r,x.fecha); if(p!=null&&p>0&&num(r.precio)!==Math.round(p*10000)/10000){ ch=true; return Object.assign({},r,{precio:Math.round(p*10000)/10000,autoPrecio:true}); } return r; });
     if(ch){ x.repuestos=rs; put('trabajos',x); n++; }
   });
@@ -1628,7 +1648,7 @@ function vPreciosEstado(){
     h+=`</div>`; });
   const o=cfg('fuentePrecio')||'stock', kit=kitPM();
   h+=`<div class="fg"><label class="fl">De dónde se toma el valor de los repuestos usados</label><select class="fs" onchange="S.config.fuentePrecio=this.value;putCfg();valorarRepuestos();render()"><option value="stock" ${o==='stock'?'selected':''}>Stock valorado y, si no está, lista de precios</option><option value="lista_stock" ${o==='lista_stock'?'selected':''}>Lista de precios y, si no está, stock valorado</option><option value="stock_only" ${o==='stock_only'?'selected':''}>Solo stock valorado</option><option value="lista" ${o==='lista'?'selected':''}>Solo lista de precios</option></select></div><div class="note">Se usa el archivo del mes del trabajo (o el más reciente anterior). Coincide por código o por descripción.</div>`;
-  h+=`<div class="fg"><label class="fl">Kit de repuestos del PM 5.000 km (se usa cuando la OT no trae repuestos)</label><textarea class="fta" style="min-height:90px;" placeholder="1x Filtro de aceite&#10;1x Filtro de aire&#10;4x Litro de aceite 15W40" onchange="S.config.kitPM=this.value;putCfg();valorarRepuestos();render()">${esc(cfg('kitPM')||'')}</textarea></div><div class="note">Una línea por repuesto: cantidad x descripción, igual a como figura en el archivo de precios. ${kit.length?kit.length+' ítem(s) configurados.':''}</div>`;
+  h+=vKit();
   return h;
 }
 /* ═══════════ INFORMES (formato Freddy) ═══════════ */
@@ -1756,7 +1776,7 @@ function vAjustes(c){
   <div class="note">Define qué importe de las OT de Flota se toma al importar, y en qué moneda se muestran y cargan los montos.</div>
   <div class="sec-hdr">Tipos de reparación</div><div class="fg"><textarea class="fta" id="aTip" style="min-height:180px;" onchange="S.config.tipos=this.value.split('\\n').map(x=>x.trim()).filter(Boolean);putCfg();toast('Lista guardada')">${esc(tipos().join('\n'))}</textarea></div><div class="note">Una por línea. Es la lista que aparece en el formulario de trabajos.</div>
   <div class="sec-hdr">Informes</div><div class="fg"><label class="fl">Elaborado por</label><input class="fi" value="${esc(cfg('elaboradoPor'))}" onchange="S.config.elaboradoPor=this.value.trim();putCfg()"></div><div class="fg"><label class="fl">Cargo</label><input class="fi" value="${esc(cfg('cargoElab'))}" onchange="S.config.cargoElab=this.value.trim();putCfg()"></div>
-  <div class="note">Versión de la app: v41</div>
+  <div class="note">Versión de la app: v42</div>
   <div class="sec-hdr">Copia de seguridad</div><div class="btn-row"><button class="btn-secondary" onclick="backup()">⬇ Exportar datos (JSON)</button><label class="btn-secondary" style="text-align:center;cursor:pointer;">⬆ Importar<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label></div>
   <div class="sec-hdr">Sesión</div><button class="btn-danger" style="width:100%" onclick="logout()">Cerrar sesión</button>`;
 }
